@@ -3,7 +3,7 @@ Math expression parser and evaluator, written from scratch in Java.\
 \
 This algorithm goes through 3 stages:
 1. Tokenizing: transforms the expression into a token list to feed into the parser.
-2. Parsing: (recursive descent)[https://en.wikipedia.org/wiki/Recursive_descent_parser] goes through token list and forms an AST.
+2. Parsing: [recursive descent](https://en.wikipedia.org/wiki/Recursive_descent_parser) goes through token list and forms an AST.
 3. Evaluating: the actual math to calculate an expression.
 # Features
 **Math Functions**:
