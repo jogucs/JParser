@@ -117,7 +117,7 @@ public abstract class JParser {
      * @return a new {@link Matrix} in reduced row-echelon form (or partially reduced depending on implementation)
      */
     public static Matrix rowReduce(Matrix matrix) {
-        return Matrix.rowReduce(matrix);
+        return MatrixMath.rowReduce(matrix);
     }
 
     /**
@@ -127,6 +127,6 @@ public abstract class JParser {
      * @return a {@link Matrix} reduced to echelon form
      */
     public static Matrix echelonForm(Matrix matrix) {
-        return Matrix.reduceToEchelon(matrix);
+        return MatrixMath.reduceToEchelon(matrix);
     }
 }
