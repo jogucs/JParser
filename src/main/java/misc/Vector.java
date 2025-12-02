@@ -1,5 +1,8 @@
 package misc;
 
+import evaluator.JParser;
+
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,15 +20,9 @@ public class Vector {
     /**
      * Underlying list of elements comprising the vector.
      */
-    private List<Double> body = new ArrayList<>();
+    private List<BigDecimal> body = new ArrayList<>();
 
-    /**
-     * Construct a Vector backed by the provided list.
-     *
-     * @param body list of double values to use as the vector body; this reference
-     *             is used directly (no defensive copy)
-     */
-    public Vector(List<Double> body) {
+    public Vector(List<BigDecimal> body) {
         this.body = body;
     }
 
@@ -36,8 +33,12 @@ public class Vector {
      * @param value new value to set
      * @throws IndexOutOfBoundsException if {@code pos} is out of range for the list
      */
-    public void setValue(int pos, double value) {
+    public void setValue(int pos, BigDecimal value) {
         this.body.set(pos, value);
+    }
+
+    public void setValue(int pos, Double value) {
+        this.body.set(pos, BigDecimal.valueOf(value));
     }
 
     /**
@@ -46,7 +47,7 @@ public class Vector {
      * @param value value to append
      */
     public void addValue(double value) {
-        this.body.add(value);
+        this.body.add(BigDecimal.valueOf(value));
     }
 
     /**
@@ -66,7 +67,7 @@ public class Vector {
      *
      * @return list of {@link Double} elements
      */
-    public List<Double> getBody() {
+    public List<BigDecimal> getBody() {
         return body;
     }
 
@@ -76,8 +77,8 @@ public class Vector {
      * @return {@code true} if every element equals {@code 0.0}, {@code false} otherwise
      */
     public boolean isZero() {
-        for (Double doub : body) {
-            if (doub != 0.0) {
+        for (BigDecimal doub : body) {
+            if (JParser.isZero(doub)) {
                 return false;
             }
         }

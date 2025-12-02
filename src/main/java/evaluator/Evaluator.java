@@ -5,6 +5,8 @@ import misc.FunctionDefinition;
 import misc.MathObject;
 import nodes.*;
 
+import java.math.BigDecimal;
+
 /**
  * The `Evaluator` class is responsible for evaluating mathematical expressions represented as an
  * abstract syntax tree (AST). It supports literals, variables, function calls, unary operations,
@@ -21,8 +23,11 @@ public class Evaluator {
      */
     public MathObject evaluate(ExpressionNode node, EvalContext context) {
         if (node instanceof LiteralNode lit) {
+            if (((BigDecimal) lit.getValue()).ulp().toString().length() != JParser.getCurrentPrecision()) {
+                JParser.setCurrentPrecision(((BigDecimal) lit.getValue()).ulp().toString().length() + 2);
+            }
             // Handle literal values by wrapping them in a MathObject.
-            return new MathObject((double) lit.getValue());
+            return new MathObject((BigDecimal) lit.getValue());
         } else if (node instanceof VariableNode var) {
             // Handle variables. If the variable is not defined in the context, return it as symbolic.
             if (!context.variables.containsKey(var.getName())) {
@@ -46,16 +51,19 @@ public class Evaluator {
 
                 // Map arguments to function parameters.
                 for (int i = 0; i < funcCall.getArgs().size(); i++) {
-                    childContext.variables.put(functionDefinition.getParameters().get(i), evaluate(funcCall.getArgs().get(i), context).getValue());
+                    childContext.variables.put(functionDefinition.getParameters().get(i), evaluate(funcCall.getArgs().get(i), context).getValue().doubleValue());
                 }
 
                 // Evaluate the function body.
-                val += evaluate(functionDefinition.getBody(), childContext).getValue();
+                val += evaluate(functionDefinition.getBody(), childContext).getValue().doubleValue();
             } else if (context.containsNativeFunction(fname)) {
                 // Evaluate native functions.
                 double[] args = new double[funcCall.getArgs().size()];
                 for (int i = 0; i < funcCall.getArgs().size(); i++) {
-                    args[i] = evaluate(funcCall.getArgs().get(i), context).getValue();
+                    args[i] = evaluate(funcCall.getArgs().get(i), context).getValue().doubleValue();
+                }
+                if (args.length < 1) {
+                    throw new RuntimeException("Can't evaluate function with 0 arguments passed");
                 }
                 return new MathObject(context.callNativeFunction(fname, args));
             } else {
@@ -69,7 +77,7 @@ public class Evaluator {
             if (value.getName() == null) {
                 // Numeric unary operations.
                 return switch (un.getSymbol()) {
-                    case NEGATIVE -> new MathObject(-1 * value.getValue());
+                    case NEGATIVE -> new MathObject(value.getValue().multiply(BigDecimal.valueOf(-1)));
                     case POSITIVE -> value;
                 };
             } else {
@@ -92,23 +100,23 @@ public class Evaluator {
             }
 
             // Numeric binary operations.
-            double left = leftObj.getValue();
-            double right = rightObj.getValue();
+            BigDecimal left = leftObj.getValue();
+            BigDecimal right = rightObj.getValue();
 
             return switch (bin.getOperator()) {
-                case PLUS -> new MathObject(left + right);
-                case MINUS -> new MathObject(left - right);
-                case MULT -> new MathObject(left * right);
-                case DIV -> new MathObject(left / right);
-                case GT -> new MathObject((left > right ? 1 : 0));
-                case LT -> new MathObject((left < right ? 1 : 0));
-                case GTE -> new MathObject((left >= right ? 1 : 0));
-                case LTE -> new MathObject((left <= right ? 1 : 0));
-                case NEQ -> new MathObject((left != right ? 1 : 0));
+                case PLUS -> new MathObject(left.add(right));
+                case MINUS -> new MathObject(left.subtract(right));
+                case MULT -> new MathObject(left.multiply(right));
+                case DIV -> new MathObject(left.divide(right));
+                case GT -> new MathObject((left.doubleValue() > right.doubleValue() ? 1 : 0));
+                case LT -> new MathObject((left.doubleValue() < right.doubleValue() ? 1 : 0));
+                case GTE -> new MathObject((left.doubleValue() >= right.doubleValue() ? 1 : 0));
+                case LTE -> new MathObject((left.doubleValue() <= right.doubleValue() ? 1 : 0));
+                case NEQ -> new MathObject((left.doubleValue() != right.doubleValue() ? 1 : 0));
                 case FILLER -> new MathObject(0.0);
                 case EQUAL -> new MathObject((left == right ? 1 : 0));
-                case PEQUAL -> new MathObject(left + (left + right));
-                case EXP -> new MathObject(evalExponent(left, right));
+                case PEQUAL -> new MathObject(left.add(left.add(right)));
+                case EXP -> new MathObject(evalExponent(left.doubleValue(), right.doubleValue()));
             };
         } else {
             // Throw an error for unknown node types.

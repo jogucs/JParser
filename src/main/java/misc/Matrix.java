@@ -1,12 +1,12 @@
 package misc;
 
-import nodes.ExpressionNode;
-import nodes.LiteralNode;
-import nodes.MatrixNode;
-import nodes.VectorNode;
+import evaluator.JParser;
+import nodes.*;
 import parser.Parser;
+import tokenizer.Operator;
 import tokenizer.Tokenizer;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -73,7 +73,7 @@ public class Matrix {
      * @param col zero-based column index
      * @return the value at the specified position
      */
-    public Double getValue(int row, int col) {
+    public BigDecimal getValue(int row, int col) {
         return columns.get(col).getBody().get(row);
     }
 
@@ -88,7 +88,7 @@ public class Matrix {
      * @param col   zero-based column index
      * @param value new value to set
      */
-    public void setValue(int row, int col, double value) {
+    public void setValue(int row, int col, BigDecimal value) {
         try {
             columns.get(col).setValue(row, value);
         } catch (IndexOutOfBoundsException e) {
@@ -168,10 +168,19 @@ public class Matrix {
     private static List<Vector> createMatrix(MatrixNode matrixNode) {
         List<Vector> cols = new ArrayList<>();
         for (VectorNode vec : matrixNode.getVectorNodeList()) {
-            List<Double> body = new ArrayList<>();
+            List<BigDecimal> body = new ArrayList<>();
             for (ExpressionNode node : vec.getBody()) {
-                if (node instanceof LiteralNode lit) {
-                    body.add((Double) lit.getValue());
+                if (node instanceof BinaryNode bin && bin.getOperator().equals(Operator.MINUS)) {
+                    body.add(BigDecimal.valueOf((Double) bin.getLeftChild().getValue()).stripTrailingZeros());
+                    body.add(BigDecimal.valueOf(-1 * (Double) bin.getRightChild().getValue()).stripTrailingZeros());
+                } else if (node instanceof UnaryNode un && un.getSymbol().equals(UnaryNode.UnarySymbol.NEGATIVE)) {
+                    body.add(((BigDecimal) un.getChild().getValue()).multiply(BigDecimal.valueOf(-1)));
+                } else if (node instanceof LiteralNode lit) {
+                    if (JParser.isZero((BigDecimal) lit.getValue())) {
+                        body.add(BigDecimal.valueOf(0.0).stripTrailingZeros());
+                    } else {
+                        body.add(((BigDecimal) lit.getValue()).stripTrailingZeros());
+                    }
                 }
             }
             cols.add(new Vector(body));

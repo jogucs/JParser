@@ -16,7 +16,6 @@ import java.util.Objects;
  *
  * <pre>
  * expression  ::= sign
- * sign        ::= term ( ( '>' | '>=' | '<=' | '<' | '==' | '!=' | '=' ) term )*
  * term        ::= factor ( ('+' | '-') factor )*
  * factor      ::= exponent ( ('*' | '/') exponent )*
  * exponent    ::= unary ( '^' unary )*

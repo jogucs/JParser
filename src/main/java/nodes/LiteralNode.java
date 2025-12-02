@@ -1,5 +1,7 @@
 package nodes;
 
+import java.math.BigDecimal;
+
 /**
  * AST node representing a numeric literal (constant) in an expression.
  *
@@ -11,7 +13,7 @@ public class LiteralNode extends ExpressionNode{
     /**
      * The numeric value of this literal.
      */
-    private double value;
+    private BigDecimal value;
 
     /**
      * Create a LiteralNode with the provided numeric value.
@@ -19,7 +21,7 @@ public class LiteralNode extends ExpressionNode{
      * @param value the numeric literal value
      */
     public LiteralNode(double value) {
-        this.value = value;
+        this.value = BigDecimal.valueOf(value);
     }
 
     /**

@@ -1,4 +1,4 @@
-# evaluator.JParser
+# JParser
 Math expression parser and evaluator, written from scratch in Java.\
 \
 This algorithm goes through 3 stages:

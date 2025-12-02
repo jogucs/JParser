@@ -3,6 +3,7 @@ package evaluator;
 import misc.Matrix;
 import misc.Vector;
 
+import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
 
@@ -39,8 +40,8 @@ public abstract class MatrixMath {
             pivotPos = getPivotColumn(matrix, rowIndex);
             int idx = rowIndex + 1;
             while (isNonZeroColumn(matrix, pivotPos, rowIndex + 1)) {
-                double scalar = matrix.getValue(idx, pivotPos) / matrix.getValue(rowIndex, pivotPos);
-                rowAddScale(matrix, rowIndex, idx, -1 * scalar);
+                BigDecimal scalar = matrix.getValue(idx, pivotPos).divide(matrix.getValue(rowIndex, pivotPos));
+                rowAddScale(matrix, rowIndex, idx, scalar.multiply(BigDecimal.valueOf(-1)));
                 idx++;
             }
             colIndex++;
@@ -69,12 +70,12 @@ public abstract class MatrixMath {
             cursor = rowIndex;
             format(matrix, cursor, columnIndex, rowIndex);
             rowSwap(matrix, cursor, rowIndex);
-            if (!isZero(matrix.getValue(rowIndex, columnIndex))) {
-                rowScale(matrix, rowIndex, (1/matrix.getValue(rowIndex, columnIndex)));
+            if (!JParser.isZero(matrix.getValue(rowIndex, columnIndex))) {
+                rowScale(matrix, rowIndex, BigDecimal.valueOf((1/matrix.getValue(rowIndex, columnIndex).doubleValue())));
             }
             for (cursor = 0; cursor < rowSize; cursor++) {
                 if (cursor != rowIndex) {
-                    rowAddScale(matrix, rowIndex, cursor, ((-1) * matrix.getValue(cursor, columnIndex)));
+                    rowAddScale(matrix, rowIndex, cursor, (matrix.getValue(cursor, columnIndex).multiply(BigDecimal.valueOf(-1))));
                 }
             }columnIndex++;
         }
@@ -92,7 +93,7 @@ public abstract class MatrixMath {
     private static void rowSwap(Matrix matrix, int rowIndex, int rowIndex2) {
         int numCols = matrix.getColSize();
 
-        double hold;
+        BigDecimal hold;
 
         for (int k = 0; k < numCols; k++) {
             hold = matrix.getValue(rowIndex2, k);
@@ -112,10 +113,10 @@ public abstract class MatrixMath {
     private static Matrix rowAdd(Matrix matrix, int rowIndex, int rowIndex2) {
         int numCols = matrix.getColSize();
 
-        double hold;
+        BigDecimal hold;
 
         for (int k = 0; k < numCols; k++) {
-            hold = matrix.getValue(rowIndex2, k) + matrix.getValue(rowIndex, k);
+            hold = matrix.getValue(rowIndex2, k).add(matrix.getValue(rowIndex, k));
 
             matrix.setValue(rowIndex, k, hold);
         }
@@ -129,11 +130,11 @@ public abstract class MatrixMath {
      * @param rowIndex row to scale
      * @param scalar  scalar multiplier
      */
-    private static void rowScale(Matrix matrix, int rowIndex, double scalar) {
+    private static void rowScale(Matrix matrix, int rowIndex, BigDecimal scalar) {
         int numCols = matrix.getColSize();
 
         for (int k = 0; k < numCols; k++) {;
-            matrix.setValue(rowIndex, k, matrix.getValue(rowIndex, k) * scalar);
+            matrix.setValue(rowIndex, k, matrix.getValue(rowIndex, k).multiply(scalar));
         }
     }
 
@@ -145,28 +146,18 @@ public abstract class MatrixMath {
      * @param rowIndex2 destination row index (receives addition)
      * @param scalar multiplier applied to source row
      */
-    private static void rowAddScale(Matrix matrix, int rowIndex, int rowIndex2, double scalar) {
+    private static void rowAddScale(Matrix matrix, int rowIndex, int rowIndex2, BigDecimal scalar) {
         int numCols = matrix.getColSize();
 
-        double hold;
+        BigDecimal hold;
 
         for (int k = 0; k < numCols; k++) {
-            hold = matrix.getValue(rowIndex2, k) + matrix.getValue(rowIndex, k) * scalar;
+            hold = matrix.getValue(rowIndex2, k).add(matrix.getValue(rowIndex, k).multiply(scalar));
             matrix.setValue(rowIndex2, k, hold);
         }
 
     }
 
-
-    /**
-     * Determine whether a value should be considered zero (with epsilon tolerance).
-     *
-     * @param val numeric value to test
-     * @return true if value is (approximately) zero
-     */
-    private static boolean isZero(double val) {
-        return Math.abs(val)<0.00001;
-    }
 
     /**
      * Check whether the matrix is in echelon form.
@@ -215,7 +206,7 @@ public abstract class MatrixMath {
      */
     private static boolean isNonZeroRow(Matrix matrix, int row) {
         for (int col = 0; col < matrix.getColSize(); col++) {
-            if (!isZero(matrix.getValue(row, col))) {
+            if (!JParser.isZero(matrix.getValue(row, col))) {
                 return true;
             }
         }
@@ -235,7 +226,7 @@ public abstract class MatrixMath {
             return true;
         }
         for (int row = startingRow; row < matrix.getRowSize(); row++) {
-            if (!isZero(matrix.getValue(row, col))) {
+            if (!JParser.isZero(matrix.getValue(row, col))) {
                 return true;
             }
         }
@@ -255,7 +246,7 @@ public abstract class MatrixMath {
         }
 
         for (int col = 0; col < matrix.getColSize(); col++) {
-            if (!isZero(matrix.getValue(row, col))) {
+            if (!JParser.isZero(matrix.getValue(row, col))) {
                 return col;
             }
         }
@@ -265,7 +256,7 @@ public abstract class MatrixMath {
     private static void format(Matrix matrix, int cursor, int columnIndex, int rowIndex) {
         int rowSize = matrix.getRowSize();
         int colSize = matrix.getColSize();
-        while (isZero(matrix.getValue(cursor, columnIndex))) {
+        while (JParser.isZero(matrix.getValue(cursor, columnIndex))) {
             cursor++;
             if (rowSize == cursor) {
                 cursor = rowIndex;
@@ -289,8 +280,8 @@ public abstract class MatrixMath {
         int idx = 0;
         for (Vector vector : matrix.getColumns()) {
             if (isNonZeroColumn(matrix, idx, 0)) {
-                for (Double d : vector.getBody()) {
-                    vector.setValue(idx, Double.parseDouble(df.format(d)));
+                for (BigDecimal d : vector.getBody()) {
+                    vector.setValue(idx, d.stripTrailingZeros());
                     idx++;
                 }
             }

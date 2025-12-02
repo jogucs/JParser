@@ -1,5 +1,7 @@
 package misc;
 
+import java.math.BigDecimal;
+
 /**
  * Represents either a named variable or a numeric constant used in mathematical
  * expressions.
@@ -20,7 +22,7 @@ public class MathObject {
      * The numeric value represented by this object.
      * When non-null this object represents a concrete numeric constant.
      */
-    private Double value;
+    private BigDecimal value;
 
     /**
      * Constructs a MathObject that represents a variable with the given name.
@@ -31,12 +33,20 @@ public class MathObject {
         this.name = name;
     }
 
+    public MathObject(Double value) {
+        this.value = BigDecimal.valueOf(value);
+    }
+
+    public MathObject(int value) {
+        this.value = BigDecimal.valueOf(value);
+    }
+
     /**
      * Constructs a MathObject that represents a numeric constant.
      *
      * @param value the numeric value to store
      */
-    public MathObject(double value) {
+    public MathObject(BigDecimal value) {
         this.value = value;
     }
 
@@ -57,8 +67,12 @@ public class MathObject {
      *
      * @return the stored numeric value, or {@code 0.0} when none is set
      */
-    public double getValue() {
-        return (this.value != null ? this.value : 0.0);
+    public BigDecimal getValue() {
+        return (this.value != null ? this.value : null);
+    }
+
+    public void setValue(BigDecimal value) {
+        this.value = value;
     }
 
     /**

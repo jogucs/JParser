@@ -6,6 +6,10 @@ import misc.MathObject;
 import parser.Parser;
 import tokenizer.Tokenizer;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.text.DecimalFormat;
+
 /**
  * Utility entry-point for parsing and evaluating mathematical expressions.
  *
@@ -22,7 +26,6 @@ import tokenizer.Tokenizer;
  * evaluator.JParser.createFunction("f(x, y, z) = x^2 + z^2 + y^2");
  * MathObject result = evaluator.JParser.evaluate("-x + f(1, 1, 1) - 9/3");
  * </pre>
- * </p>
  */
 public abstract class JParser {
     /**
@@ -35,6 +38,11 @@ public abstract class JParser {
      * Global evaluator instance used to evaluate parsed ASTs.
      */
     public static Evaluator EVALUATOR = new Evaluator();
+
+    private static DecimalFormat decimalFormat = new DecimalFormat("#.###########") {{
+        setRoundingMode(RoundingMode.CEILING);
+    }};
+    private static final int currentPrecision = 10;
 
     /**
      * Parser instance used for the most recent parse operation.
@@ -72,12 +80,17 @@ public abstract class JParser {
     public static MathObject evaluate(String expression) {
         if (expression.trim().isEmpty()) {
             // Return zero for empty input
-            return new MathObject(0.0);
+            return new MathObject(new BigDecimal(0));
         }
         // Tokenize and parse the expression, storing the parser for potential inspection
         PARSER = new Parser(new Tokenizer(expression).tokenize());
         // Evaluate the parsed AST using the shared CONTEXT
-        return EVALUATOR.evaluate(PARSER.parseExpression(), CONTEXT);
+        MathObject object = EVALUATOR.evaluate(PARSER.parseExpression(), CONTEXT);
+        if (isZero(object.getValue())) {
+            return new MathObject(0.0);
+        }
+        object.setValue(BigDecimal.valueOf(Double.parseDouble(decimalFormat.format(object.getValue()))));
+        return object;
     }
 
     /**
@@ -93,6 +106,14 @@ public abstract class JParser {
      */
     public static void createFunction(String expression) {
         CONTEXT.addFunction(expression);
+    }
+
+    public static int getCurrentPrecision() {
+        return currentPrecision;
+    }
+
+    public static void setCurrentPrecision(int decimalPlaces) {
+        decimalFormat = new DecimalFormat("#." + "#".repeat(decimalPlaces));
     }
 
     /**
@@ -128,5 +149,15 @@ public abstract class JParser {
      */
     public static Matrix echelonForm(Matrix matrix) {
         return MatrixMath.reduceToEchelon(matrix);
+    }
+
+    /**
+     * Determine whether a value should be considered zero (with epsilon tolerance).
+     *
+     * @param val numeric value to test
+     * @return true if value is (approximately) zero
+     */
+    public static boolean isZero(BigDecimal val) {
+        return Math.abs(val.doubleValue()) < Double.longBitsToDouble(971L << 52);
     }
 }
