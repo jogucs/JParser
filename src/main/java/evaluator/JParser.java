@@ -3,6 +3,7 @@ package evaluator;
 import misc.EvalContext;
 import misc.Matrix;
 import misc.MathObject;
+import nodes.ExpressionNode;
 import parser.Parser;
 import tokenizer.Tokenizer;
 
@@ -93,6 +94,10 @@ public abstract class JParser {
         return object;
     }
 
+    public static MathObject evaluate(ExpressionNode node) {
+        return EVALUATOR.evaluate(node, CONTEXT);
+    }
+
     /**
      * Create a new user-defined function from the given function definition expression.
      *
@@ -158,6 +163,6 @@ public abstract class JParser {
      * @return true if value is (approximately) zero
      */
     public static boolean isZero(BigDecimal val) {
-        return Math.abs(val.doubleValue()) < Double.longBitsToDouble(971L << 52);
+        return Math.abs(val.doubleValue()) <= 0.0000001;
     }
 }

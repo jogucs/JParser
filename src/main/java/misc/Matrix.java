@@ -21,7 +21,7 @@ import java.util.List;
  * This class is intentionally lightweight and assumes numeric (double) entries.
  * </p>
  */
-public class Matrix {
+public class Matrix implements Cloneable{
     /**
      * Columns of the matrix; each column is represented as a {@link Vector}.
      */
@@ -94,6 +94,10 @@ public class Matrix {
         } catch (IndexOutOfBoundsException e) {
             System.err.println("Position out of bounds");
         }
+    }
+
+    public void setColumns(List<Vector> columns) {
+        this.columns = columns;
     }
 
     /** Append a column vector to the matrix. */
@@ -171,8 +175,10 @@ public class Matrix {
             List<BigDecimal> body = new ArrayList<>();
             for (ExpressionNode node : vec.getBody()) {
                 if (node instanceof BinaryNode bin && bin.getOperator().equals(Operator.MINUS)) {
-                    body.add(BigDecimal.valueOf((Double) bin.getLeftChild().getValue()).stripTrailingZeros());
-                    body.add(BigDecimal.valueOf(-1 * (Double) bin.getRightChild().getValue()).stripTrailingZeros());
+                    BigDecimal dec1 = JParser.evaluate(bin.getLeftChild()).getValue();
+                    BigDecimal dec2 = JParser.evaluate(bin.getRightChild()).getValue();
+                    body.add(dec1);
+                    body.add(dec2);
                 } else if (node instanceof UnaryNode un && un.getSymbol().equals(UnaryNode.UnarySymbol.NEGATIVE)) {
                     body.add(((BigDecimal) un.getChild().getValue()).multiply(BigDecimal.valueOf(-1)));
                 } else if (node instanceof LiteralNode lit) {
@@ -192,5 +198,48 @@ public class Matrix {
             }
         }
         return cols;
+    }
+
+    public static Matrix createMatrix(int size) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < size; i++) {
+            sb.append("[");
+            sb.append("0 ".repeat(size - 1));
+            sb.append("0");
+            sb.append("]");
+        }
+        return new Matrix(sb.toString());
+    }
+
+    /**
+     * Makes a clone of this matrix.
+     *
+     * @return a cloned matrix.
+     */
+    @Override
+    public Matrix clone() {
+        try {
+            Matrix clone = (Matrix) super.clone();
+            List<Vector> cols = new ArrayList<>();
+            for (Vector vector : this.columns) {
+                List<BigDecimal> body = new ArrayList<>();
+                for (BigDecimal decimal : vector.getBody()) {
+                    body.add(BigDecimal.valueOf(decimal.doubleValue()));
+                }
+                cols.add(new Vector(body));
+            }
+            clone.setColumns(cols);
+            return clone;
+        } catch (CloneNotSupportedException e) {
+            throw new AssertionError();
+        }
+    }
+
+    public static Matrix createIdentityMatrix(int size) {
+        Matrix matrix = createMatrix(size);
+        for (int i = 0; i < size; i++) {
+            matrix.setValue(i, i, new BigDecimal("1"));
+        }
+        return matrix;
     }
 }

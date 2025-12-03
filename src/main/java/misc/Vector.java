@@ -11,7 +11,7 @@ import java.util.List;
  * mutation and inspection operations.
  *
  * <p>This class stores the vector elements in a mutable {@link List} of
- * {@link Double}. It provides methods to set or append values, query the size
+ * {@link BigDecimal}. It provides methods to set or append values, query the size
  * and access the underlying list, and to check whether all elements are zero.
  * Note: {@link #isZero()} uses exact equality against 0.0; consider using an
  * epsilon comparison for floating-point tolerance if needed.</p>
@@ -35,10 +35,6 @@ public class Vector {
      */
     public void setValue(int pos, BigDecimal value) {
         this.body.set(pos, value);
-    }
-
-    public void setValue(int pos, Double value) {
-        this.body.set(pos, BigDecimal.valueOf(value));
     }
 
     /**
