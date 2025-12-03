@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
+import java.util.List;
 
 public abstract class MatrixMath {
     /**
@@ -121,6 +122,12 @@ public abstract class MatrixMath {
         }
 
         return newMatrix;
+    }
+
+    public static Vector findX(Matrix matrix, Vector b) {
+        Matrix bAsMatrix = new Matrix(List.of(b));
+        Matrix added = addMatricesTogether(matrix, bAsMatrix);
+        return rowReduce(added).getColumns().getLast();
     }
 
     public static BigDecimal findDeterminant(Matrix matrixToFindDeterminant) {

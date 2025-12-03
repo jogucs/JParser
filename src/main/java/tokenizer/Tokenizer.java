@@ -129,6 +129,8 @@ public class Tokenizer {
                 else if (currentChar.equals('[') || currentChar.equals(']')) {
                     sb.append(currentChar);
                     tokens.add(new VectorToken(sb.toString()));
+                } else if (currentChar.equals(' ')) {
+                    tokens.add(new SpaceToken());
                 }
                 // Advance to next character and reset the buffer
                 advance();

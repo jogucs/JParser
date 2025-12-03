@@ -30,7 +30,8 @@ public abstract class ExpressionNode {
         VECTOR,
         MATRIX,
         BINARY,
-        UNARY
+        UNARY,
+        SPACE
     }
 
     /**

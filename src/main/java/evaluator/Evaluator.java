@@ -5,6 +5,7 @@ import nodes.*;
 import literals.FunctionDefinition;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * The `Evaluator` class is responsible for evaluating mathematical expressions represented as an
@@ -106,7 +107,7 @@ public class Evaluator {
                 case PLUS -> new MathObject(left.add(right));
                 case MINUS -> new MathObject(left.subtract(right));
                 case MULT -> new MathObject(left.multiply(right));
-                case DIV -> new MathObject(left.divide(right));
+                case DIV -> new MathObject(left.divide(right, 200, RoundingMode.HALF_UP));
                 case GT -> new MathObject((left.doubleValue() > right.doubleValue() ? 1 : 0));
                 case LT -> new MathObject((left.doubleValue() < right.doubleValue() ? 1 : 0));
                 case GTE -> new MathObject((left.doubleValue() >= right.doubleValue() ? 1 : 0));
@@ -116,7 +117,10 @@ public class Evaluator {
                 case PEQUAL -> new MathObject(left.add(left.add(right)));
                 case EXP -> new MathObject(evalExponent(left.doubleValue(), right.doubleValue()));
             };
-        } else {
+        } else if (node instanceof SpaceNode spaceNode) {
+            return new MathObject(0.0);
+        }
+        else {
             // Throw an error for unknown node types.
             throw new RuntimeException("Unknown node type " + node);
         }

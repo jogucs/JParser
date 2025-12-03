@@ -1,12 +1,13 @@
 package literals;
 
 import evaluator.JParser;
+import evaluator.MatrixMath;
 import nodes.*;
 import parser.Parser;
-import tokenizer.Operator;
 import tokenizer.Tokenizer;
 
 import java.math.BigDecimal;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -54,8 +55,12 @@ public class Matrix implements Cloneable{
      * @param matrix textual representation of a matrix
      */
     public Matrix(String matrix) {
-        Parser parser = new Parser(new Tokenizer(matrix).tokenize());
-        this.columns = createMatrix((MatrixNode) parser.parseExpression());
+        Tokenizer tokenizer = new Tokenizer(matrix);
+        Parser parser = new Parser(tokenizer.tokenize());
+        if (parser.parseExpression() instanceof MatrixNode matrixNode) {
+            this.columns = matrixFromMatrixNode(matrixNode);
+
+        }
     }
 
     /** Default empty matrix constructor. */
@@ -143,6 +148,33 @@ public class Matrix implements Cloneable{
     }
 
     /**
+     * Build a Matrix from a parsed {@link MatrixNode} produced by the parser.
+     *
+     * @param matrixNode parsed matrix AST node
+     */
+    private static List<Vector> matrixFromMatrixNode(MatrixNode matrixNode) {
+        DecimalFormat df = new DecimalFormat("#." +  "#".repeat(JParser.getCurrentPrecision()));
+        List<Vector> vectors = new ArrayList<>();
+        for (VectorNode vectorNode : matrixNode.getVectorNodeList()) {
+            List<BigDecimal> body = new ArrayList<>();
+            for (ExpressionNode expressionNode : vectorNode.getBody()) {
+                if (expressionNode instanceof BinaryNode binaryNode) {
+                    BigDecimal decimal = JParser.evaluate(binaryNode).getValue();
+                    body.add(BigDecimal.valueOf(Double.parseDouble(df.format(decimal))).stripTrailingZeros());
+                } else if (expressionNode instanceof LiteralNode literalNode) {
+                    BigDecimal decimal = new BigDecimal(literalNode.getValue().toString());
+                    body.add(decimal.stripTrailingZeros());
+                } else if (expressionNode instanceof UnaryNode unaryNode) {
+                    BigDecimal decimal = JParser.evaluate(unaryNode).getValue();
+                    body.add(decimal.stripTrailingZeros());
+                }
+            }
+            vectors.add(new Vector(body));
+        }
+        return vectors;
+    }
+
+    /**
      * Human-readable representation of the matrix in row-major textual form.
      *
      * @return string with each row on a new line
@@ -160,47 +192,6 @@ public class Matrix implements Cloneable{
             str.append("\n");
         }
         return str.toString();
-    }
-
-    /**
-     * Build a Matrix from a parsed {@link MatrixNode} produced by the parser.
-     *
-     * @param matrixNode parsed matrix AST node
-     * @return list of column {@link Vector}s
-     * @throws RuntimeException if the parsed vectors have inconsistent sizes
-     */
-    private static List<Vector> createMatrix(MatrixNode matrixNode) {
-        List<Vector> cols = new ArrayList<>();
-        for (VectorNode vec : matrixNode.getVectorNodeList()) {
-            List<BigDecimal> body = new ArrayList<>();
-            for (ExpressionNode node : vec.getBody()) {
-                if (node instanceof BinaryNode bin) {
-                    BigDecimal dec1 = JParser.evaluate(bin.getLeftChild()).getValue();
-                    BigDecimal dec2 = JParser.evaluate(bin.getRightChild()).getValue();
-                    if (bin.getOperator().equals(Operator.MINUS)) {
-                        dec2 = dec2.multiply(new BigDecimal("-1"));
-                    }
-                    body.add(dec1);
-                    body.add(dec2);
-                } else if (node instanceof UnaryNode un) {
-                    body.add(JParser.evaluate(un).getValue());
-                } else if (node instanceof LiteralNode lit) {
-                    if (JParser.isZero((BigDecimal) lit.getValue())) {
-                        body.add(BigDecimal.valueOf(0.0).stripTrailingZeros());
-                    } else {
-                        body.add(((BigDecimal) lit.getValue()).stripTrailingZeros());
-                    }
-                }
-            }
-            cols.add(new Vector(body));
-        }
-        int colSize = cols.getFirst().getSize();
-        for (Vector vector : cols) {
-            if (vector.getSize() != colSize) {
-                throw new RuntimeException("Invalid matrix size");
-            }
-        }
-        return cols;
     }
 
     public static Matrix createMatrix(int size) {

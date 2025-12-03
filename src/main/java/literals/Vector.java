@@ -1,6 +1,8 @@
 package literals;
 
 import evaluator.JParser;
+import nodes.ExpressionNode;
+import nodes.VectorNode;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -79,5 +81,17 @@ public class Vector {
             }
         }
         return true;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+
+        for (int i = 0; i < this.body.size(); i++) {
+            sb.append("[");
+            sb.append(this.body.get(i));
+            sb.append("]\n");
+        }
+        return sb.toString();
     }
 }

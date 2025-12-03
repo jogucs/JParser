@@ -43,5 +43,6 @@ public enum TokenType {
     /**
      * End-of-file/input marker.
      */
+    SPACE,
     EOF,
 }

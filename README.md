@@ -18,6 +18,10 @@ This algorithm goes through 3 stages:
 **Matrices**:
 - Row reduction
 - Echelon form
+- Inverse 
+- Determinant
+\
+*Any matrix operation will return a new matrix without modifying the original one.
 
 # Examples
 **Matrix Math**

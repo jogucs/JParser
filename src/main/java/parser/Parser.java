@@ -35,6 +35,8 @@ public class Parser {
      */
     private final List<Token> tokens;
 
+    private boolean inVector = false;
+
     /**
      * Current position (index) within {@link #tokens}.
      */
@@ -157,6 +159,9 @@ public class Parser {
                 return node;
             } case BEGVEC -> {
                 return parseMatrix();
+            } case SPACE -> {
+                consume();
+                return new SpaceNode();
             }
             case null, default -> throw new RuntimeException("Invalid token type passed " + tok.getType());
         }
@@ -196,6 +201,7 @@ public class Parser {
      * @return {@link VectorNode} containing parsed expressions for each element
      */
     private VectorNode parseVector() {
+        inVector = true;
         consume();
         List<ExpressionNode> body = new ArrayList<>();
 
@@ -203,6 +209,7 @@ public class Parser {
             body.add(parseExpression());
         }
         consume();
+        inVector = false;
         return new VectorNode(body);
     }
 
