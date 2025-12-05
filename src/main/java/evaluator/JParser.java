@@ -180,6 +180,63 @@ public abstract class JParser {
         return MatrixMath.findDeterminant(matrix);
     }
 
+    public static MathObject integrate(ExpressionNode root, String wrt) {
+        MathObject integrated = new MathObject("");
+        if (root instanceof BinaryNode binaryNode) {
+            ExpressionNode left = binaryNode.getLeftChild();
+            ExpressionNode right = binaryNode.getRightChild();
+            integrated.operation(integrateExpression(left, right, binaryNode.getOperator(), wrt), "+");
+        }
+
+        return integrated;
+    }
+
+    private static MathObject integrateExpression(ExpressionNode left, ExpressionNode right, Operator operator, String wrt) {
+        MathObject integrated = new MathObject("");
+        if (left instanceof BinaryNode) {
+            integrated.operation(integrate(left, wrt), "+");
+        }
+        if (right instanceof BinaryNode) {
+            integrated.operation(integrate(right, wrt), "+");
+        }
+
+        return switch (operator) {
+            case EXP -> integrateExp(left, right, wrt);
+            case MULT ->  integrateMult(integrated, left, right, wrt);
+            case null, default -> integrated;
+        };
+    }
+
+    private static MathObject integrateExp(ExpressionNode left, ExpressionNode right, String wrt) {
+        MathObject variable = evaluate(left);
+        MathObject exponent = evaluate(right);
+
+        if (exponent.getValue() != null) {
+            exponent.setValue(exponent.getValue().stripTrailingZeros().add(ONE));
+        } else if (exponent.getName() != null) {
+            exponent.setName(exponent.getName() + "+1");
+            exponent.addParenthesis();
+        }
+        exponent.setName(exponent.toString());
+
+        MathObject integrated = new MathObject("");
+        integrated.combine(variable);
+        integrated.operation(exponent, "^");
+        integrated.addParenthesis();
+        integrated.operation(exponent, "/");
+
+        return integrated;
+    }
+
+    private static MathObject integrateMult(MathObject accumulated, ExpressionNode left, ExpressionNode right, String wrt) {
+        MathObject leftObject = integrate(left, wrt);
+        MathObject rightObject = integrate(right, wrt);
+
+        accumulated = MathObject.combine(leftObject, rightObject, "*");
+        accumulated.addParenthesis();
+        return accumulated;
+    }
+
     private static MathObject findDerivative(ExpressionNode root, String wrt) {
         parseThroughTree(root);
         MathObject derivative = new MathObject("");
