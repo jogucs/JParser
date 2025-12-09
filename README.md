@@ -15,6 +15,9 @@ This algorithm goes through 3 stages:
   - Radians/degrees
   - Any user defined functions
 
+**Calculus**
+- Differentiation
+
 **Matrices**:
 - Row reduction
 - Echelon form

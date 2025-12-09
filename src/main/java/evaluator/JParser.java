@@ -476,6 +476,10 @@ public abstract class JParser {
             } else {
                 return findDerivative(unaryNode.getChild(), wrt);
             }
+        } else if (root instanceof FunctionCallNode functionCallNode) {
+            FunctionDefinition def = CONTEXT.lookupFunction(functionCallNode.getName());
+            MathObject object = evaluate(def.getBody());
+            return findDerivative(JParser.parse(object), wrt);
         }
         return derivative;
     }
@@ -508,8 +512,6 @@ public abstract class JParser {
         MathObject variable = evaluate(left);
         MathObject exp = evaluate(right);
         MathObject expReduced;
-        exp.forceParenthesis();
-        variable.forceParenthesis();
 
         if (!variable.toString().contains(wrt)) {
             return new MathObject(0);

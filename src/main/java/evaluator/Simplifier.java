@@ -143,9 +143,11 @@ public class Simplifier {
                         combinedValues.add(val);
                     }
                 }
-                combinedValues.forEach(e -> MathObject.combine(combined, e, (e.toString().contains("-") ? "" : "+")));
-                if (combined.getName().charAt(0) == '+') {
-                    combined.setName(combined.getName().substring(1));
+                for (MathObject value : combinedValues) {
+                    combined = MathObject.combine(combined, value, (value.toString().contains("-") ? "" : "+"));
+                }
+                if (!combined.toString().isEmpty() && combined.getName().charAt(0) == '+') {
+                     combined.setName(combined.getName().substring(1));
                 }
                 System.out.println(combined);
             } else {

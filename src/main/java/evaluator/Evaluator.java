@@ -5,6 +5,7 @@ import nodes.*;
 import literals.FunctionDefinition;
 import tokenizer.Operator;
 
+import javax.rmi.ssl.SslRMIClientSocketFactory;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
@@ -37,9 +38,6 @@ public class Evaluator {
             return literal;
         } else if (node instanceof VariableNode var) {
             // Handle variables. If the variable is not defined in the context, return it as symbolic.
-            if (!context.variables.containsKey(var.getName())) {
-                return new MathObject(var.getName());
-            }
             return new MathObject(var.getName());
         } else if (node instanceof FunctionCallNode funcCall) {
             // Handle function calls, including user-defined and native functions.
@@ -213,12 +211,13 @@ public class Evaluator {
     }
 
     private ExpressionNode substituteFunctionBody(FunctionDefinition definition, List<ExpressionNode> callArgs) {
-        MathObject body = JParser.parseThroughTree(definition.getBody());
+        MathObject body = JParser.evaluate(definition.getBody());
         List<String> params = definition.getParameters();
         for (int i = 0; i < params.size() && i < callArgs.size(); i++) {
             String param = params.get(i);
-            MathObject argExpr = JParser.parseThroughTree(callArgs.get(i));
+            MathObject argExpr = JParser.evaluate(callArgs.get(i));
             body.setName(body.toString().replaceAll("\\b" + Pattern.quote(param) + "\\b", "(" + argExpr + ")"));
+
         }
         return JParser.parse(body.toString());
     }
