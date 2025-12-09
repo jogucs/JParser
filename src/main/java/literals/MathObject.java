@@ -2,12 +2,16 @@ package literals;
 
 import evaluator.JParser;
 import nodes.ExpressionNode;
+import nodes.UnaryNode;
 import nodes.VariableNode;
 import tokenizer.Operator;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Represents either a named variable or a numeric constant used in mathematical
@@ -64,6 +68,24 @@ public class MathObject {
         JParser.normalize(this);
     }
 
+    public String findVariable() {
+        for (String s : this.name.split("")) {
+            if (!JParser.isNumeric(s) && !Operator.getAsStringList().contains(s) && !s.equals("(") && !s.equals(")")) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    public String findExponent() {
+        for (String s : this.name.split("")) {
+            if (s.equals("^")) {
+                return String.valueOf(this.name.charAt(this.name.indexOf("^") + 1));
+            }
+        }
+        return "1";
+    }
+
     public boolean isCharacter() {
         return this.name != null;
     }
@@ -84,6 +106,13 @@ public class MathObject {
         this.exponent = exponent;
     }
 
+    public void setCharAt(String s, int index) {
+        if (index >= this.name.length() || index < 0) return;
+        char[] chars = this.name.toCharArray();
+        chars[index] = s.charAt(0);
+        this.setName(String.copyValueOf(chars));
+    }
+
     /**
      * Returns the variable name stored in this object.
      *
@@ -91,6 +120,18 @@ public class MathObject {
      */
     public String getName() {
         return name;
+    }
+
+    public UnaryNode.UnarySymbol getSign() {
+        for (int i = 0; i < this.toString().length(); i++) {
+            if (this.toString().charAt(i) == '-') {
+                return UnaryNode.UnarySymbol.NEGATIVE;
+            }
+            if (JParser.isNumeric(String.valueOf(this.toString().charAt(i)))) {
+                return UnaryNode.UnarySymbol.POSITIVE;
+            }
+        }
+        return UnaryNode.UnarySymbol.POSITIVE;
     }
 
     /**
@@ -199,14 +240,13 @@ public class MathObject {
     public MathObject removeTrailingParenthesis() {
         if (this.name == null || this.name.length() < 2 || !this.name.contains("(")) return this;
         String s = this.name;
-        while (s.length() >= 2 && s.charAt(0) == '(' && s.charAt(s.length() - 1) == ')' && isSurroundedBySinglePair(s)) {
+        while (s.length() >= 2 && s.charAt(0) == '(' && s.charAt(s.length() - 1) == ')' && !isSurroundedBySinglePair(s)) {
             s = s.substring(1, s.length() - 1);
         }
         s = s.substring(1, s.length() - 1);
         this.name = s;
         return this;
     }
-
 
 
     /**

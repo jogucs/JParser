@@ -116,12 +116,12 @@ public class Simplifier {
                 List<Integer> signs = new ArrayList<>();
                 if (left instanceof BinaryNode subBin && !(right instanceof BinaryNode)) {
                     if (subBin.getOperator().equals(Operator.MULT)) {
-                        collectTerms(left, 1, terms, signs);
+                        collectTerms(left, subBin.getOperator().equals(Operator.MINUS) ? -1 : 1, terms, signs);
                         left = factor(left);
                     }
                 } else if (!(left instanceof BinaryNode) && right instanceof BinaryNode subBin) {
                     if (subBin.getOperator().equals(Operator.MULT)) {
-                        collectTerms(right, 1, terms, signs);
+                        collectTerms(right, subBin.getOperator().equals(Operator.MINUS) ? -1 : 1, terms, signs);
                         right = factor(right);
                     }
                 } else {
@@ -136,8 +136,8 @@ public class Simplifier {
                 MathObject combined = new MathObject("");
                 for (int i = 0; i < leftSize; i++) {
                     for (int j = leftSize; j < terms.size(); j++) {
-                            val = combineTerms(terms.get(i), terms.get(j), "*");
-                        if (signs.get(i).equals(-1)) {
+                        val = combineTerms(terms.get(i), terms.get(j), "*");
+                        if (signs.get(i).equals(-1) || signs.get(j).equals(-1)) {
                             val = new MathObject("-" + val.toString());
                         }
                         combinedValues.add(val);
@@ -149,12 +149,10 @@ public class Simplifier {
                 if (!combined.toString().isEmpty() && combined.getName().charAt(0) == '+') {
                      combined.setName(combined.getName().substring(1));
                 }
-                System.out.println(combined);
-            } else {
-                return JParser.parse(JParser.evaluate(node));
+                return JParser.parse(combined);
             }
         } else if (node instanceof MatrixNode || node instanceof FunctionCallNode || node instanceof FunctionDefinitionNode
-                || node instanceof VariableNode || node instanceof LiteralNode || node instanceof VectorNode || node instanceof SpaceNode) {
+                || node instanceof VariableNode || node instanceof LiteralNode || node instanceof VectorNode || node instanceof SpaceNode || node instanceof UnaryNode) {
             // leaf or complex nodes: nothing to fold at this simple pass
             return node;
         }
@@ -163,9 +161,28 @@ public class Simplifier {
 
     private static MathObject combineTerms(ExpressionNode left, ExpressionNode right, String operator) {
         MathObject leftObject = JParser.evaluate(left);
-        MathObject rightObject = JParser.evaluate(left);
-        System.out.println(leftObject + operator + rightObject);
-        return leftObject.operation(rightObject, operator);
+        MathObject rightObject = JParser.evaluate(right);
+        String varInLeft = leftObject.findVariable();
+        String varInRight = rightObject.findVariable();
+        String leftExp = leftObject.findExponent();
+        String rightExp = rightObject.findExponent();
+        MathObject combined;
+        if (varInLeft != null && varInRight != null) {
+            MathObject newExp = JParser.evaluate(leftExp + "+" + rightExp);
+            combined = new MathObject(varInLeft + "^" + newExp.toString());
+            combined.forceParenthesis();
+            return combined;
+        } else if (varInLeft != null) {
+            leftObject.removeTrailingParenthesis();
+            combined = rightObject.combine(leftObject);
+            return combined;
+        } else if (varInRight != null) {
+            rightObject.removeTrailingParenthesis();
+            combined = leftObject.combine(rightObject);
+            return combined;
+        } else {
+            return leftObject.operation(rightObject, operator);
+        }
     }
 }
 

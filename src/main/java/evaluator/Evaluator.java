@@ -5,12 +5,9 @@ import nodes.*;
 import literals.FunctionDefinition;
 import tokenizer.Operator;
 
-import javax.rmi.ssl.SslRMIClientSocketFactory;
 import java.math.BigDecimal;
-import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.List;
-import java.util.SequencedSet;
 import java.util.regex.Pattern;
 
 /**
@@ -27,7 +24,7 @@ public class Evaluator {
      * @param context The evaluation context containing variable and function definitions.
      * @return A `MathObject` representing the result of the evaluation, which can be numeric or symbolic.
      */
-    public MathObject evaluate(ExpressionNode node, EvalContext context) {
+    public MathObject evaluate(ExpressionNode node, Context context) {
         if (node instanceof LiteralNode lit) {
             if (((BigDecimal) lit.getValue()).ulp().toString().length() != JParser.getCurrentPrecision()) {
                 JParser.setCurrentPrecision(((BigDecimal) lit.getValue()).ulp().toString().length() + 2);
@@ -45,14 +42,14 @@ public class Evaluator {
             FunctionDefinition def = context.lookupFunction(fname);
             if (def != null) {
                 ExpressionNode substituted = substituteFunctionBody(def, funcCall.getArgs());
-                EvalContext childContext = new EvalContext(context);
+                Context childContext = new Context(context);
                 return evaluate(substituted, childContext);
             }
             double val = 0.0;
 
             if (context.containsFunction(funcCall.getName())) {
                 // Evaluate user-defined functions.
-                EvalContext childContext = new EvalContext(context);
+                Context childContext = new Context(context);
                 FunctionDefinition functionDefinition = context.lookupFunction(funcCall.getName());
 
                 // Validate the number of arguments.
@@ -120,7 +117,11 @@ public class Evaluator {
                 }
                 String op = operatorToString(bin.getOperator());
                 String sym;
-                sym = leftObj + "" + op + "" + rightObj;
+                if (!op.equals("*")) {
+                    sym = leftObj + "" + op + "" + rightObj;
+                } else {
+                    sym =  leftObj + "" + rightObj;
+                }
                 MathObject symObject = new MathObject(sym);
                 symObject.forceParenthesis();
                 return symObject;
@@ -216,8 +217,7 @@ public class Evaluator {
         for (int i = 0; i < params.size() && i < callArgs.size(); i++) {
             String param = params.get(i);
             MathObject argExpr = JParser.evaluate(callArgs.get(i));
-            body.setName(body.toString().replaceAll("\\b" + Pattern.quote(param) + "\\b", "(" + argExpr + ")"));
-
+            body.setName(body.toString().replaceAll(Pattern.quote(param), "(" + argExpr + ")"));
         }
         return JParser.parse(body.toString());
     }

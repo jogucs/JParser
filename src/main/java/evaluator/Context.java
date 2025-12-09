@@ -1,6 +1,7 @@
 package evaluator;
 
 import literals.FunctionDefinition;
+import literals.MathObject;
 import nodes.ExpressionNode;
 import nodes.FunctionDefinitionNode;
 import parser.Parser;
@@ -21,7 +22,7 @@ import java.util.function.Function;
  * function bodies).
  * </p>
  */
-public class EvalContext {
+public class Context {
     /**
      * Map of variable names to numeric values available in this context.
      * Pre-populated with mathematical constants.
@@ -63,16 +64,18 @@ public class EvalContext {
         put("ln", args -> BigDecimal.valueOf(Math.log(args[0].doubleValue())));
         put("log", args -> BigDecimal.valueOf(Math.log10(args[0].doubleValue())));
         // 'int' expects two args: upper and lower limits (placeholder implementation).
-        put("fac", args -> EvalContext.factorial(args[0]));
-        put("perm", args -> EvalContext.permutation(args[0], args[1]));
-        put("comb", args -> EvalContext.combination(args[0], args[1]));
+        put("fac", args -> factorial(args[0]));
+        put("perm", args -> permutation(args[0], args[1]));
+        put("comb", args -> combination(args[0], args[1]));
+        put("mod", args -> mod(args[0], args[1]));
+        put("div", args -> div(args[0], args[1]));
     }};
 
     /** Optional parent context. When present, functions are inherited from the parent. */
-    public EvalContext parent;
+    public Context parent;
 
     /** Create an empty root evaluation context. */
-    public EvalContext() {}
+    public Context() {}
 
     /**
      * Create a child context that inherits functions and native functions from {@code parent}.
@@ -85,7 +88,7 @@ public class EvalContext {
      *
      * @param parent the parent context to inherit functions from
      */
-    public EvalContext(EvalContext parent) {
+    public Context(Context parent) {
         this.parent = parent;
         // Copy user-defined functions so child can modify its own function map independently.
         for (FunctionDefinition functionDefinition : parent.functions.values()) {
@@ -209,4 +212,25 @@ public class EvalContext {
         BigDecimal permutation = permutation(n, k);
         return permutation.divide(factorial(k));
     }
+
+    private static BigDecimal mod(BigDecimal a, BigDecimal b) {
+        return a.remainder(b);
+    }
+
+    private static BigDecimal div(BigDecimal a, BigDecimal b) {
+        return a.divide(b).subtract(mod(a, b));
+    }
+
+    public static MathObject euclidianGcf(MathObject a, MathObject b) {
+        if (JParser.isZero(b)) {
+            throw new RuntimeException("Unable to find gcf when b = 0");
+        }
+        MathObject quotient = new MathObject(0);
+        MathObject remainder = new MathObject(a.toString());
+
+
+
+        return a;
+    }
+
 }

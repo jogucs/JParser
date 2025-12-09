@@ -33,7 +33,7 @@ import java.util.Random;
  */
 public abstract class JParser {
     /* Public shared context and evaluator */
-    public static EvalContext CONTEXT = new EvalContext();
+    public static Context CONTEXT = new Context();
     public static Evaluator EVALUATOR = new Evaluator();
 
     /**
@@ -60,7 +60,7 @@ public abstract class JParser {
     // ---------------------------------------------------------------------
 
     /**
-     * Parse and evaluate the given expression string using the shared {@link EvalContext}.
+     * Parse and evaluate the given expression string using the shared {@link Context}.
      *
      * <p>If the expression is empty or only whitespace, returns a {@link MathObject} wrapping 0.</p>
      *
@@ -72,14 +72,15 @@ public abstract class JParser {
             return new MathObject(new BigDecimal(0));
         }
         ExpressionNode parsed = parse(expression);
-        ExpressionNode simplified = Simplifier.simplify(parsed);
-        MathObject object = EVALUATOR.evaluate(simplified, CONTEXT);
+        ExpressionNode factored = Simplifier.factor(parsed);
+        MathObject object = EVALUATOR.evaluate(factored, CONTEXT);
         if (isZero(object)) {
             return new MathObject(0);
         }
         if (object.getValue() != null) {
             object.setName(normalize(object.getValue()));
         }
+        object.removeTrailingParenthesis();
         return object;
     }
 
@@ -113,7 +114,7 @@ public abstract class JParser {
      * @return evaluated {@link MathObject}
      */
     public static MathObject evaluate(ExpressionNode node) {
-        return EVALUATOR.evaluate(node, CONTEXT);
+        return evaluate(EVALUATOR.evaluate(node, CONTEXT).toString());
     }
 
     /**
@@ -184,21 +185,52 @@ public abstract class JParser {
 
     /**
      * Attempt to find roots for a polynomial expression. (Work in progress in original.)
+     * Utilizes Newton-Raphson method of finding roots.
      *
      * @param expression polynomial expression
      * @param variables variable names
      * @return list of roots as {@link MathObject}
      */
-    public static List<MathObject> findRoots(String expression, String... variables) {
-        ExpressionNode body = createFunction(JParser.evaluate(createFunctionFromPolynomial(expression, variables).getExpression()).toString());
-        List<MathObject> objects = new ArrayList<>();
+    public static List<BigDecimal> findRoots(String expression, String... variables) {
+        ExpressionNode body = JParser.parse(expression);
+        FunctionDefinition definition = createFunctionFromPolynomial(expression, variables);
+        String id = definition.getName();
+        String expr = definition.getExpression();
+        MathObject derivative = findDerivative(body, variables[0]);
+        FunctionDefinition derivativeFunction = createFunctionFromPolynomial(derivative.toString(), variables);
+        List<BigDecimal> objects = new ArrayList<>();
         int rootsFound = 0;
         int degree = findPolynomialDegree(body);
-        BigDecimal lastValue;
+        BigDecimal firstGuess = new BigDecimal(1);
+        BigDecimal secondGuess = new BigDecimal(-1);
+        MathObject firstValue = evaluate(id + "(" + firstGuess + ")");
+        MathObject secondValue = evaluate(id + "(" + secondGuess + ")");
+        BigDecimal[] brackets;
+        boolean signChange = firstValue.getSign() != secondValue.getSign();
+        while (!signChange && firstGuess.doubleValue() < Integer.MAX_VALUE && secondGuess.doubleValue() < Integer.MAX_VALUE) {
+            firstGuess =  firstGuess.multiply(BigDecimal.valueOf(2));
+            secondGuess = secondGuess.multiply(BigDecimal.valueOf(2));
+            firstValue = evaluate(id + "(" + firstGuess + ")");
+            secondValue = evaluate(id + "(" + secondGuess + ")");
+            if (firstValue.getSign() != secondValue.getSign()) {
+                signChange = true;
+            }
+        }
+        brackets = new BigDecimal[]{firstGuess, secondGuess};
+        BigDecimal root;
         while (rootsFound < degree) {
+            objects.add(findRootsHelper(definition, derivativeFunction, brackets));
             rootsFound++;
         }
         return objects;
+    }
+
+    private static BigDecimal findRootsHelper(FunctionDefinition expression, FunctionDefinition derivative, BigDecimal[] range) {
+        if (range.length != 2) {
+            throw new RuntimeException("Range should be in 2d coordinates");
+        }
+
+        return null;
     }
 
     /**
@@ -326,6 +358,10 @@ public abstract class JParser {
         } else {
             return val.getName() != null && val.getName().isEmpty();
         }
+    }
+
+    public static boolean isZero(BigDecimal decimal) {
+        return isZero(new MathObject(decimal));
     }
 
     /**
