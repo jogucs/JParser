@@ -1,8 +1,13 @@
 package literals;
 
+import evaluator.JParser;
+import nodes.ExpressionNode;
+import nodes.VariableNode;
+import tokenizer.Operator;
+
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
+import java.math.MathContext;
+import java.math.RoundingMode;
 
 /**
  * Represents either a named variable or a numeric constant used in mathematical
@@ -26,6 +31,9 @@ public class MathObject {
      */
     private BigDecimal value;
 
+    private MathObject coefficient;
+    private MathObject exponent;
+
     /**
      * Constructs a MathObject that represents a variable with the given name.
      *
@@ -33,6 +41,9 @@ public class MathObject {
      */
     public MathObject(String name) {
         this.name = name;
+        if (JParser.isNumeric(name) && !name.isEmpty()) {
+            this.setValue(BigDecimal.valueOf(Double.parseDouble(name)));
+        }
     }
 
     public MathObject(Double value) {
@@ -50,10 +61,27 @@ public class MathObject {
      */
     public MathObject(BigDecimal value) {
         this.value = value;
+        JParser.normalize(this);
     }
 
     public boolean isCharacter() {
         return this.name != null;
+    }
+
+    public MathObject getCoefficient() {
+        return coefficient;
+    }
+
+    public void setCoefficient(MathObject coefficient) {
+        this.coefficient = coefficient;
+    }
+
+    public MathObject getExponent() {
+        return exponent;
+    }
+
+    public void setExponent(MathObject exponent) {
+        this.exponent = exponent;
     }
 
     /**
@@ -95,63 +123,91 @@ public class MathObject {
     }
 
     public MathObject combine(MathObject object, String string) {
-        this.setName(this + string + object.toString());
+        this.setName(this.toString() + string + object.toString());
         return this;
     }
 
     public static MathObject combine(MathObject object1, MathObject object2) {
-        MathObject newObject = object1.combine(object2);
-        return newObject;
+        return new MathObject(object1+ "" + object2);
     }
 
     public static MathObject combine(MathObject object1, MathObject object2, String string) {
-        MathObject object = object1.combine(object2, string);
-        return object;
+        return new MathObject(object1 + "" + string + "" + object2);
     }
 
     public MathObject operation(MathObject object, String operator) {
-        if (this.getName() != null) {
-            if (object.getName() != null && !this.getName().isEmpty()) {
-                this.name = this.name + (object.getName().isEmpty() ? "" : operator + object.getName());
-            } else if (!this.getName().isEmpty() && object.getValue() != null){
-                this.name = this.name + operator + object.getValue();
-            } else if (object.getName() != null && this.getName().isEmpty()){
-                if (operator.equals("-")) {
-                    this.name = "-" + object.getName();
-                } else {
-                    this.name = object.getName();
-                }
-            } else {
-                this.name = "";
-            }
-        } else if (this.getValue() != null) {
-            BigDecimal newVal = this.value;
-            if (object.getValue() != null) {
-                if (operator.equals("-")) {
-                    newVal = this.value.subtract(object.getValue());
-                } else if (operator.equals("+")) {
-                    newVal = this.value.add(object.getValue());
-                } else if (operator.equals("*")) {
-                    newVal = this.value.multiply(object.getValue());
-                }
-                this.value = newVal;
-            } else {
-                if (this.name != null && this.name.isEmpty()) {
-                    this.name = object.getValue().toString();
-                } else {
-                    this.name = this.value.toString() + operator + (object.getValue());
-                }
-            }
+        Operator op = Operator.getAsString(operator);
+        if (this.getValue() != null && object.getValue() != null) {
+            return switch (op) {
+                case MULT -> new MathObject(this.getValue().multiply(object.getValue()));
+                case DIV -> new MathObject(this.getValue().divide(object.getValue(), new MathContext(JParser.getCurrentPrecision(), RoundingMode.HALF_UP)));
+                case PLUS -> new MathObject(this.getValue().add(object.getValue()));
+                case MINUS -> new MathObject(this.getValue().subtract(object.getValue()));
+                case null, default -> null;
+            };
+        } else {
+            return combine(this, object, operator);
         }
-        return this;
+    }
+
+    public MathObject operation(String operator) {
+        MathObject object = operation(this, operator);
+        return object;
     }
 
     public void addParenthesis() {
         if (this.name == null) {
             this.name = this.value.toString();
         }
+        if (this.name.isEmpty()) return;
+
+        String s = this.name;
+        if (isSurroundedBySinglePair(s)) {
+            return;
+        }
+
         this.name = "(" + this.name + ")";
     }
+
+    public void forceParenthesis() {
+        if (this.name == null) {
+            this.name = this.value.toPlainString();
+        }
+        this.name = "(" + this.name + ")";
+    }
+
+    private boolean isSurroundedBySinglePair(String s) {
+        if (s.length() < 2) {
+            return false;
+        }
+        if (s.charAt(0) != '(') {
+            return false;
+        }
+        int depth = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '(') depth++;
+            else if (c == ')') {
+                depth--;
+                if (depth == 0 && i < s.length() - 1) return false;
+            }
+        }
+
+        return depth == 0;
+    }
+
+    public MathObject removeTrailingParenthesis() {
+        if (this.name == null || this.name.length() < 2 || !this.name.contains("(")) return this;
+        String s = this.name;
+        while (s.length() >= 2 && s.charAt(0) == '(' && s.charAt(s.length() - 1) == ')' && isSurroundedBySinglePair(s)) {
+            s = s.substring(1, s.length() - 1);
+        }
+        s = s.substring(1, s.length() - 1);
+        this.name = s;
+        return this;
+    }
+
+
 
     /**
      * Returns a string representation of this MathObject.

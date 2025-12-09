@@ -7,6 +7,8 @@ import parser.Parser;
 import tokenizer.Tokenizer;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -59,7 +61,6 @@ public class Matrix implements Cloneable{
         Parser parser = new Parser(tokenizer.tokenize());
         if (parser.parseExpression() instanceof MatrixNode matrixNode) {
             this.columns = matrixFromMatrixNode(matrixNode);
-
         }
     }
 
@@ -165,25 +166,22 @@ public class Matrix implements Cloneable{
      * @param matrixNode parsed matrix AST node
      */
     private static List<Vector> matrixFromMatrixNode(MatrixNode matrixNode) {
-        DecimalFormat df = new DecimalFormat("#." +  "#".repeat(JParser.getCurrentPrecision()));
+        MathContext mc = new MathContext(JParser.getCurrentPrecision(), RoundingMode.UP);
         List<Vector> vectors = new ArrayList<>();
         for (VectorNode vectorNode : matrixNode.getVectorNodeList()) {
             List<MathObject> body = new ArrayList<>();
             for (ExpressionNode expressionNode : vectorNode.getBody()) {
                 if (expressionNode instanceof BinaryNode binaryNode) {
                     MathObject object = JParser.evaluate(binaryNode);
-                    if (object.getValue() != null) {
-                        object.setValue(object.getValue().stripTrailingZeros());
-                        body.add(object);
-                    } else {
-                        body.add(object);
-                    }
+                    ExpressionNode root = JParser.parse(object.toString());
+                    object = JParser.evaluate(root);
+                    body.add(object);
                 } else if (expressionNode instanceof LiteralNode literalNode) {
-                    BigDecimal decimal = new BigDecimal(literalNode.getValue().toString());
-                    body.add(new MathObject(decimal.stripTrailingZeros()));
+                    MathObject object = JParser.evaluate(literalNode);
+                    body.add(object);
                 } else if (expressionNode instanceof UnaryNode unaryNode) {
                     BigDecimal decimal = JParser.evaluate(unaryNode).getValue();
-                    body.add(new MathObject(decimal.stripTrailingZeros()));
+                    body.add(new MathObject(decimal.round(mc)));
                 } else if (expressionNode instanceof VariableNode variableNode) {
                     MathObject object = JParser.evaluate(variableNode);
                     body.add(object);

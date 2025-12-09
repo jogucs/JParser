@@ -6,6 +6,7 @@ import nodes.FunctionDefinitionNode;
 import parser.Parser;
 import tokenizer.Tokenizer;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Function;
 
@@ -46,24 +47,25 @@ public class EvalContext {
      * The {@code int} function here is a placeholder that calls {@link #integral(double, double)}.
      * </p>
      */
-    public Map<String, Function<double[], Double>> nativeFunctions = new HashMap<>() {{
-        put("cos", args -> Math.cos(args[0]));
-        put("sin", args -> Math.sin(args[0]));
-        put("tan", args -> Math.tan(args[0]));
-        put("tanh", args -> Math.tanh(args[0]));
-        put("sinh", args -> Math.sinh(args[0]));
-        put("cosh", args -> Math.cosh(args[0]));
-        put("asin", args -> Math.asin(args[0]));
-        put("acos", args -> Math.acos(args[0]));
-        put("atan", args -> Math.atan(args[0]));
-        put("cbrt", args -> Math.cbrt(args[0]));
-        put("sqrt", args -> Math.sqrt(args[0]));
-        put("abs", args -> Math.abs(args[0]));
-        put("ln", args -> Math.log(args[0]));
-        put("log", args -> Math.log10(args[0]));
+    public Map<String, Function<BigDecimal[], BigDecimal>> nativeFunctions = new HashMap<>() {{
+        put("cos", args -> BigDecimal.valueOf(Math.cos(args[0].doubleValue())));
+        put("sin", args -> BigDecimal.valueOf(Math.sin((args[0].doubleValue()))));
+        put("tan", args -> BigDecimal.valueOf(Math.tan(args[0].doubleValue())));
+        put("tanh", args -> BigDecimal.valueOf(Math.tanh(args[0].doubleValue())));
+        put("sinh", args -> BigDecimal.valueOf(Math.sinh(args[0].doubleValue())));
+        put("cosh", args -> BigDecimal.valueOf(Math.cosh(args[0].doubleValue())));
+        put("asin", args -> BigDecimal.valueOf(Math.asin(args[0].doubleValue())));
+        put("acos", args -> BigDecimal.valueOf(Math.acos(args[0].doubleValue())));
+        put("atan", args -> BigDecimal.valueOf(Math.atan(args[0].doubleValue())));
+        put("cbrt", args -> BigDecimal.valueOf(Math.cbrt(args[0].doubleValue())));
+        put("sqrt", args -> BigDecimal.valueOf(Math.sqrt(args[0].doubleValue())));
+        put("abs", args -> BigDecimal.valueOf(Math.abs(args[0].doubleValue())));
+        put("ln", args -> BigDecimal.valueOf(Math.log(args[0].doubleValue())));
+        put("log", args -> BigDecimal.valueOf(Math.log10(args[0].doubleValue())));
         // 'int' expects two args: upper and lower limits (placeholder implementation).
-        put("int", args -> EvalContext.integral(args[0], args[1]));
         put("fac", args -> EvalContext.factorial(args[0]));
+        put("perm", args -> EvalContext.permutation(args[0], args[1]));
+        put("comb", args -> EvalContext.combination(args[0], args[1]));
     }};
 
     /** Optional parent context. When present, functions are inherited from the parent. */
@@ -107,21 +109,18 @@ public class EvalContext {
      * @return the created {@link FunctionDefinition}
      * @throws RuntimeException if parsing fails or the function already exists
      */
-    public FunctionDefinitionNode addFunction(String func) {
+    public ExpressionNode addFunction(String func) {
         Tokenizer tokenizer = new Tokenizer(func);
         Parser parser = new Parser(tokenizer.tokenize());
         ExpressionNode root = parser.parseExpression();
-        if (root instanceof FunctionDefinitionNode functionDefinitionNode) {
-            // Ensure duplicate function names are not added.
-            if (functions.containsKey((String) functionDefinitionNode.getValue())) {
-                throw new RuntimeException("literals.Function " + functionDefinitionNode.getValue() + " already exists in context");
-            }
-            FunctionDefinition def = defineFunction(functionDefinitionNode);
-            def.setExpression(func);
-            functions.put(def.getName(), def);
-            return functionDefinitionNode;
+        FunctionDefinitionNode functionDefinitionNode = (FunctionDefinitionNode) root;// Ensure duplicate function names are not added.
+        if (functions.containsKey((String) functionDefinitionNode.getValue())) {
+            throw new RuntimeException("literals.Function " + functionDefinitionNode.getValue() + " already exists in context");
         }
-        throw new RuntimeException("Unable to parse function " + func);
+        FunctionDefinition def = defineFunction(functionDefinitionNode);
+        def.setExpression(func);
+        functions.put(def.getName(), def);
+        return functionDefinitionNode.getBody();
     }
 
     /**
@@ -171,8 +170,8 @@ public class EvalContext {
      * @param args numeric arguments
      * @return the function result as {@code Double}
      */
-    public Double callNativeFunction(String name, double[] args) {
-        Function<double[], Double> f = nativeFunctions.get(name);
+    public BigDecimal callNativeFunction(String name, BigDecimal[] args) {
+        Function<BigDecimal[], BigDecimal> f = nativeFunctions.get(name);
         return f.apply(args);
     }
 
@@ -192,11 +191,22 @@ public class EvalContext {
         return 0.0;
     }
 
-    private static double factorial(double number) {
-        double val = 1;
-        for (double i = number; i > 0; i--) {
-            val *= i;
+    private static BigDecimal factorial(BigDecimal number) {
+        BigDecimal decimal = new BigDecimal(1);
+        for (double i = number.doubleValue(); i > 0; i--) {
+            decimal = decimal.multiply(BigDecimal.valueOf(i));
         }
-        return val;
+        return decimal;
+    }
+
+    private static BigDecimal permutation(BigDecimal n, BigDecimal k) {
+        BigDecimal n_fac = factorial(n);
+        BigDecimal k_fac = factorial(n.subtract(k));
+        return n_fac.divide(k_fac);
+    }
+
+    private static BigDecimal combination(BigDecimal n, BigDecimal k) {
+        BigDecimal permutation = permutation(n, k);
+        return permutation.divide(factorial(k));
     }
 }

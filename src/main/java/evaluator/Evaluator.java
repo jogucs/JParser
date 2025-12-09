@@ -6,7 +6,11 @@ import literals.FunctionDefinition;
 import tokenizer.Operator;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.math.RoundingMode;
+import java.util.List;
+import java.util.SequencedSet;
+import java.util.regex.Pattern;
 
 /**
  * The `Evaluator` class is responsible for evaluating mathematical expressions represented as an
@@ -28,16 +32,24 @@ public class Evaluator {
                 JParser.setCurrentPrecision(((BigDecimal) lit.getValue()).ulp().toString().length() + 2);
             }
             // Handle literal values by wrapping them in a MathObject.
-            return new MathObject((BigDecimal) lit.getValue());
+            MathObject literal = new MathObject((BigDecimal) lit.getValue());
+            literal.setName(JParser.normalize(literal.getValue()));
+            return literal;
         } else if (node instanceof VariableNode var) {
             // Handle variables. If the variable is not defined in the context, return it as symbolic.
             if (!context.variables.containsKey(var.getName())) {
                 return new MathObject(var.getName());
             }
-            return new MathObject(context.variables.get(var.getName()));
+            return new MathObject(var.getName());
         } else if (node instanceof FunctionCallNode funcCall) {
             // Handle function calls, including user-defined and native functions.
             String fname = funcCall.getName();
+            FunctionDefinition def = context.lookupFunction(fname);
+            if (def != null) {
+                ExpressionNode substituted = substituteFunctionBody(def, funcCall.getArgs());
+                EvalContext childContext = new EvalContext(context);
+                return evaluate(substituted, childContext);
+            }
             double val = 0.0;
 
             if (context.containsFunction(funcCall.getName())) {
@@ -52,7 +64,10 @@ public class Evaluator {
 
                 // Map arguments to function parameters.
                 for (int i = 0; i < funcCall.getArgs().size(); i++) {
-                    childContext.variables.put(functionDefinition.getParameters().get(i), evaluate(funcCall.getArgs().get(i), context).getValue().doubleValue());
+                    MathObject object = evaluate(funcCall.getArgs().get(i), context);
+                    if (object.getValue() != null) {
+                        childContext.variables.put(functionDefinition.getParameters().get(i), object.getValue().doubleValue());
+                    }
                 }
 
                 // Evaluate the function body.
@@ -64,9 +79,9 @@ public class Evaluator {
                 }
             } else if (context.containsNativeFunction(fname)) {
                 // Evaluate native functions.
-                double[] args = new double[funcCall.getArgs().size()];
+                BigDecimal[] args = new BigDecimal[funcCall.getArgs().size()];
                 for (int i = 0; i < funcCall.getArgs().size(); i++) {
-                    args[i] = evaluate(funcCall.getArgs().get(i), context).getValue().doubleValue();
+                    args[i] = evaluate(funcCall.getArgs().get(i), context).getValue();
                 }
                 if (args.length < 1) {
                     throw new RuntimeException("Can't evaluate function with 0 arguments passed");
@@ -97,22 +112,20 @@ public class Evaluator {
             // Handle binary operations (e.g., addition, subtraction, multiplication, etc.).
             MathObject leftObj = evaluate(bin.getLeftChild(), context);
             MathObject rightObj = evaluate(bin.getRightChild(), context);
-            if (leftObj.getName() != null || rightObj.getName() != null) {
+            if ((!JParser.isNumeric(leftObj.toString()) && leftObj.getName() != null) || (!JParser.isNumeric(rightObj.toString()) && rightObj.getName() != null)) {
                 // Symbolic binary operations.
                 if (leftObj.getValue() != null) {
-                    leftObj.setValue(leftObj.getValue().stripTrailingZeros());
+                    leftObj.setValue(leftObj.getValue());
                 }
                 if (rightObj.getValue() != null) {
-                    rightObj.setValue(rightObj.getValue().stripTrailingZeros());
+                    rightObj.setValue(rightObj.getValue());
                 }
                 String op = operatorToString(bin.getOperator());
                 String sym;
-                if (op.equals("*")) {
-                    sym = leftObj + "" + rightObj;
-                } else {
-                    sym = leftObj + "" + op + "" + rightObj;
-                }
-                return new MathObject(sym);
+                sym = leftObj + "" + op + "" + rightObj;
+                MathObject symObject = new MathObject(sym);
+                symObject.forceParenthesis();
+                return symObject;
             }
 
             // Numeric binary operations.
@@ -135,8 +148,7 @@ public class Evaluator {
             };
         } else if (node instanceof SpaceNode spaceNode) {
             return new MathObject(0.0);
-        }
-        else {
+        } else {
             // Throw an error for unknown node types.
             throw new RuntimeException("Unknown node type " + node);
         }
@@ -155,6 +167,24 @@ public class Evaluator {
             val *= left;
         }
         return val;
+    }
+
+    private MathObject combineTerms(MathObject left, MathObject right, Operator operator) {
+        switch (operator) {
+            case MULT -> {
+                // Case for left being variable, right being literal
+                if (left.getName() != null && right.getValue() != null) {
+                    return MathObject.combine(right, left, "*");
+                } else if (left.getName() == null && right.getValue() == null) { // Case for left being number, right being variable
+                    return MathObject.combine(left, right, "*");
+                } else {
+                    return new MathObject(left.getValue().multiply(right.getValue()));
+                }
+            } case PLUS -> {
+
+            }
+        }
+        return left;
     }
 
     /**
@@ -180,5 +210,16 @@ public class Evaluator {
             case "PEQUAL" -> "+=";
             default -> name;
         };
+    }
+
+    private ExpressionNode substituteFunctionBody(FunctionDefinition definition, List<ExpressionNode> callArgs) {
+        MathObject body = JParser.parseThroughTree(definition.getBody());
+        List<String> params = definition.getParameters();
+        for (int i = 0; i < params.size() && i < callArgs.size(); i++) {
+            String param = params.get(i);
+            MathObject argExpr = JParser.parseThroughTree(callArgs.get(i));
+            body.setName(body.toString().replaceAll("\\b" + Pattern.quote(param) + "\\b", "(" + argExpr + ")"));
+        }
+        return JParser.parse(body.toString());
     }
 }

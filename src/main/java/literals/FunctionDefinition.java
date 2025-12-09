@@ -48,6 +48,7 @@ public class FunctionDefinition {
         this.name = name;
         this.params = params;
         this.body = body;
+        this.expression = JParser.evaluate(body).toString();
         JParser.CONTEXT.functions.put(name, this);
     }
 

@@ -93,6 +93,10 @@ public class Tokenizer {
                     // Emit a NumberToken with parsed double value
                     tokens.add(new NumberToken(sb.toString(), Double.parseDouble(sb.toString())));
                 }
+                else if (currentChar.equals(')') || currentChar.equals('(')) {
+                    sb.append(currentChar);
+                    tokens.add(new ParenthesisToken(sb.toString()));
+                }
                 // Operator token: check for two-char operator first
                 else if (operators.contains(currentChar.toString())) {
                     if (peek() != null && operators.contains(currentChar.toString() + peek())) {
@@ -119,10 +123,6 @@ public class Tokenizer {
                     tokens.add(new IdentifierToken(sb.toString()));
                 }
                 // Parentheses
-                else if (currentChar.equals(')') || currentChar.equals('(')) {
-                    sb.append(currentChar);
-                    tokens.add(new ParenthesisToken(sb.toString()));
-                }
                 // Comma separator
                 else if (currentChar.equals(',')) {
                     tokens.add(new CommaToken());

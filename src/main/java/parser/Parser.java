@@ -39,6 +39,7 @@ public class Parser {
     private final List<Token> tokens;
 
     private boolean inVector = false;
+    private boolean inFunction = false;
 
     /**
      * Current position (index) within {@link #tokens}.
@@ -94,9 +95,6 @@ public class Parser {
             Token token = consume();
             ExpressionNode right = parseExponent();
             left = new BinaryNode(token, left, right);
-            if (((BinaryNode) left).getRightChild() instanceof VariableNode variableNode) {
-                variableNode.setCoefficient(JParser.evaluate(((BinaryNode) left).getLeftChild()));
-            }
         }
 
         return left;
@@ -115,13 +113,6 @@ public class Parser {
             Token token = consume();
             ExpressionNode right = parseUnary();
             left = new BinaryNode(token, left, right);
-            if (((BinaryNode) left).getLeftChild() instanceof VariableNode variableNode) {
-                if (((BinaryNode) left).getRightChild().getValue() instanceof BigDecimal) {
-                    variableNode.setExponent(new MathObject((BigDecimal) ((BinaryNode) left).getRightChild().getValue()));
-                } else {
-                    variableNode.setExponent(new MathObject((String) ((BinaryNode) left).getRightChild().getValue()));
-                }
-            }
         }
 
         return left;
@@ -174,6 +165,9 @@ public class Parser {
             } case LPAREN -> {
                 consume();
                 ExpressionNode node = parseExpression();
+                if (peek() != null && peek().getType().equals(TokenType.LPAREN)) {
+                    tokens.add(position + 1, new OperatorToken("*", Operator.MULT));
+                }
                 consume();
                 return node;
             } case BEGVEC -> {

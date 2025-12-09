@@ -3,6 +3,7 @@ package evaluator;
 import literals.MathObject;
 import literals.Matrix;
 import literals.Vector;
+import nodes.ExpressionNode;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -157,7 +158,7 @@ public abstract class MatrixMath {
         return newMatrix;
     }
 
-    public static String findCharacteristicPolynomial(Matrix matrixToFind) {
+    public static MathObject findCharacteristicPolynomial(Matrix matrixToFind) {
         Matrix matrix = matrixToFind.clone();
         int colSize = matrix.getColSize();
         int rowSize = matrix.getRowSize();
@@ -168,8 +169,9 @@ public abstract class MatrixMath {
         for (int i = 0; i < colSize; i++) {
             matrix.setValue(i, i, new MathObject(matrix.getValue(i, i) + "-λ"));
         }
-
-        return findDeterminantLaplace(matrix).toString();
+        MathObject object = findDeterminantLaplace(matrix);
+        object.setName(object.getName().substring(0, object.getName().length() - 1));
+        return JParser.evaluate(object.toString());
     }
 
     public static Vector findAxb(Matrix matrix, Vector b) {
@@ -180,10 +182,13 @@ public abstract class MatrixMath {
 
     public static MathObject findDeterminant(Matrix matrixToFindDeterminant) {
 
-        MathObject determinant = new MathObject(1);
+        MathObject determinant = new MathObject("1");
+        MathObject scalar;
         Matrix echelon = makeTriangular(matrixToFindDeterminant);
         for (int i = 0; i < matrixToFindDeterminant.getColSize(); i++) {
-            determinant.operation(echelon.getValue(i, i), "*");
+            scalar = echelon.getValue(i, i);
+            scalar.forceParenthesis();
+            determinant = determinant.operation(scalar, "*");
         }
         return determinant;
     }
@@ -215,21 +220,20 @@ public abstract class MatrixMath {
             MathObject c = matrix.getValue(1, 0);
             bc = new MathObject("(" + b + ") * (" + c + ")");
             ad_bc = ad;
-            ad_bc.operation(bc, "-");
+            ad_bc = ad_bc.operation(bc, "-");
             ad_bc.addParenthesis();
             currentScalar.addParenthesis();
-            currentScalar.operation(ad_bc, "*");
+            currentScalar = currentScalar.operation(ad_bc, "*");
             if (colIdx[0] - 1 % 2 == 0) {
-                currentScalar.operation(findDeterminantLaplace(matrixToFindDeterminate, colIdx[0] + 1), "+");
+                currentScalar = currentScalar.operation(findDeterminantLaplace(matrixToFindDeterminate, colIdx[0] + 1), "+");
             } else {
-                currentScalar.operation(findDeterminantLaplace(matrixToFindDeterminate, colIdx[0] + 1), "-");
+                currentScalar = currentScalar.operation(findDeterminantLaplace(matrixToFindDeterminate, colIdx[0] + 1), "-");
             }
         } else {
-            currentScalar.operation(findDeterminantLaplace(deleteRowCol(matrixToFindDeterminate, 0, colIdx[0]), colIdx[0] + 1), "*");
+            currentScalar = currentScalar.operation(findDeterminantLaplace(deleteRowCol(matrixToFindDeterminate, 0, colIdx[0]), colIdx[0] + 1), "*");
         }
 
         determinant = currentScalar;
-
         return determinant;
     }
 
@@ -324,6 +328,7 @@ public abstract class MatrixMath {
         int numCols = matrix.getColSize();
 
         for (int k = 0; k < numCols; k++) {;
+
             matrix.setValue(rowIndex, k, matrix.getValue(rowIndex, k).getValue().multiply(scalar));
         }
     }

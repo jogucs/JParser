@@ -1,185 +1,140 @@
 package evaluator;
 
+import literals.FunctionDefinition;
 import literals.Matrix;
 import literals.MathObject;
 import nodes.*;
 import parser.Parser;
 import tokenizer.Operator;
+import tokenizer.Token;
 import tokenizer.Tokenizer;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
+import java.text.NumberFormat;
+import java.text.ParsePosition;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
 /**
  * Utility entry-point for parsing and evaluating mathematical expressions.
  *
- * <p>
- * This class exposes static helpers to evaluate expressions, create user-defined functions,
- * and perform matrix operations. It holds a global {@code CONTEXT} and {@code EVALUATOR}
- * used across evaluations. Designed as a thin facade over the tokenizer/parser/evaluator
- * components.
+ * <p>Provides a thin facade over tokenizer, parser and evaluator components.
+ * Exposes static helpers to evaluate expressions, create user-defined functions,
+ * perform calculus operations (differentiate/integrate) and matrix operations.
  * </p>
  *
- * <p>
- * Example usage:
- * <pre>
- * evaluator.JParser.createFunction("f(x, y, z) = x^2 + z^2 + y^2");
- * MathObject result = evaluator.JParser.evaluate("-x + f(1, 1, 1) - 9/3");
- * </pre>
+ * <p>State is held in the shared {@link #CONTEXT} and {@link #EVALUATOR}. Callers
+ * should treat the class as a procedural API.</p>
  */
 public abstract class JParser {
-    /**
-     * Global evaluation context. Contains variables, user-defined functions and native functions.
-     * Shared across evaluations; child contexts are created as needed when evaluating function bodies.
-     */
+    /* Public shared context and evaluator */
     public static EvalContext CONTEXT = new EvalContext();
-
-    /**
-     * Global evaluator instance used to evaluate parsed ASTs.
-     */
     public static Evaluator EVALUATOR = new Evaluator();
-
-    private static DecimalFormat decimalFormat = new DecimalFormat("#.###########") {{
-        setRoundingMode(RoundingMode.CEILING);
-    }};
-    private static final int currentPrecision = 10;
-
-    public static final BigDecimal NEGATIVE_ONE = new BigDecimal("-1");
-    public static final BigDecimal ZERO = new BigDecimal("0");
-    public static final BigDecimal ONE = new BigDecimal("1");
 
     /**
      * Parser instance used for the most recent parse operation.
-     *
-     * <p>
-     * This field is updated on each call to {@link #evaluate(String)}. Keeping it public
-     * can be useful for debugging or inspecting the last-parsed expression, but callers
-     * should not rely on it being non-null between calls.
-     * </p>
+     * May be {@code null} between calls.
      */
     public static Parser PARSER;
 
+    /* Formatting / precision defaults */
+    private static DecimalFormat decimalFormat = new DecimalFormat("#.###########") {{
+        setRoundingMode(RoundingMode.CEILING);
+    }};
+    private static int currentPrecision = 10;
+
+    public static final BigDecimal NEGATIVE_ONE = new BigDecimal("-1");
+
     /**
      * Whether angle inputs/outputs should be interpreted in degrees.
-     *
-     * <p>
-     * This flag is available for future use by the evaluator/native functions that
-     * perform trigonometric computations. Currently the flag is stored but not read
-     * by the native trig implementations in {@link evaluator.EvalContext}.
-     * </p>
      */
     private static boolean degrees;
+
+    // ---------------------------------------------------------------------
+    // Calculation and public API (grouped)
+    // ---------------------------------------------------------------------
 
     /**
      * Parse and evaluate the given expression string using the shared {@link EvalContext}.
      *
-     * <p>
-     * If the expression is empty or only whitespace, returns a {@link MathObject} wrapping 0.0.
-     * Otherwise the expression is tokenized and parsed to an AST and then evaluated.
-     * </p>
+     * <p>If the expression is empty or only whitespace, returns a {@link MathObject} wrapping 0.</p>
      *
      * @param expression the expression string to evaluate
-     * @return a {@link MathObject} containing the numeric or symbolic evaluation result
+     * @return evaluated {@link MathObject}
      */
     public static MathObject evaluate(String expression) {
         if (expression.trim().isEmpty()) {
-            // Return zero for empty input
             return new MathObject(new BigDecimal(0));
         }
-        // Tokenize and parse the expression, storing the parser for potential inspection
-        PARSER = new Parser(new Tokenizer(expression).tokenize());
-        // Evaluate the parsed AST using the shared CONTEXT
-        MathObject object = EVALUATOR.evaluate(PARSER.parseExpression(), CONTEXT);
+        ExpressionNode parsed = parse(expression);
+        ExpressionNode simplified = Simplifier.simplify(parsed);
+        MathObject object = EVALUATOR.evaluate(simplified, CONTEXT);
         if (isZero(object)) {
-            return new MathObject(0.0);
+            return new MathObject(0);
+        }
+        if (object.getValue() != null) {
+            object.setName(normalize(object.getValue()));
         }
         return object;
     }
 
+    /**
+     * Tokenize and parse the given expression string to an {@link ExpressionNode}.
+     *
+     * @param expression expression to parse
+     * @return root {@link ExpressionNode}
+     */
     public static ExpressionNode parse(String expression) {
-        PARSER = new Parser(new Tokenizer(expression).tokenize());
+        Tokenizer tokenizer = new Tokenizer(expression);
+        List<Token> tokens = tokenizer.tokenize();
+        PARSER = new Parser(tokens);
         return PARSER.parseExpression();
     }
 
+    /**
+     * Parse a {@link MathObject} by converting to string then parsing.
+     *
+     * @param object object to parse
+     * @return parsed {@link ExpressionNode}
+     */
+    public static ExpressionNode parse(MathObject object) {
+        return parse(object.toString());
+    }
+
+    /**
+     * Evaluate an already-parsed {@link ExpressionNode} using the shared context.
+     *
+     * @param node expression node to evaluate
+     * @return evaluated {@link MathObject}
+     */
     public static MathObject evaluate(ExpressionNode node) {
         return EVALUATOR.evaluate(node, CONTEXT);
     }
 
-    public static MathObject findDerivative(String expression, String withRespectTo) {
+    /**
+     * Differentiate the given expression string with respect to the provided variable.
+     *
+     * @param expression expression to differentiate
+     * @param withRespectTo variable name
+     * @return derivative as a {@link MathObject}
+     */
+    public static MathObject differentiate(String expression, String withRespectTo) {
         ExpressionNode body = parse(expression);
         return findDerivative(body, withRespectTo);
     }
 
     /**
-     * Create a new user-defined function from the given function definition expression.
+     * Integrate the provided {@link ExpressionNode} with respect to {@code wrt}.
      *
-     * <p>
-     * The provided expression should be a valid function definition, for example:
-     * {@code "f(x) = x^2"} or {@code "g(a,b)=a+b"}. The function is added to the global
-     * context maintained by {@link #CONTEXT}.
-     * </p>
-     *
-     * @param expression function definition expression
+     * @param root expression root to integrate
+     * @param wrt variable name
+     * @return integral as a {@link MathObject}
      */
-    public static FunctionDefinitionNode createFunction(String expression) {
-        return CONTEXT.addFunction(expression);
-    }
-
-    public static int getCurrentPrecision() {
-        return currentPrecision;
-    }
-
-    public static void setCurrentPrecision(int decimalPlaces) {
-        decimalFormat = new DecimalFormat("#." + "#".repeat(decimalPlaces));
-    }
-
-    /**
-     * Toggle whether trigonometric functions and other angle-based operations should
-     * use degrees instead of radians.
-     *
-     * <p>
-     * Note: Native trig implementations must read this flag to change behavior; current
-     * built-in functions in {@link evaluator.EvalContext} use {@link Math} which expects radians.
-     * </p>
-     *
-     * @param degrees true to use degrees, false to use radians
-     */
-    public static void changeDegrees(boolean degrees) {
-        JParser.degrees = degrees;
-    }
-
-    /**
-     * Perform row reduction (Gaussian elimination) on the provided matrix.
-     *
-     * @param matrix the matrix to row-reduce
-     * @return a new {@link Matrix} in reduced row-echelon form (or partially reduced depending on implementation)
-     */
-    public static Matrix rowReduce(Matrix matrix) {
-        return MatrixMath.rowReduce(matrix);
-    }
-
-    /**
-     * Convert the provided matrix to echelon form.
-     *
-     * @param matrix the matrix to convert
-     * @return a {@link Matrix} reduced to echelon form
-     */
-    public static Matrix makeTriangular(Matrix matrix) {
-        return MatrixMath.makeTriangular(matrix);
-    }
-
-    public static Matrix inverseMatrix(Matrix matrix) {
-        return MatrixMath.findInverse(matrix);
-    }
-
-    public static MathObject matrixDeterminant(Matrix matrix) {
-        return MatrixMath.findDeterminant(matrix);
-    }
-
     public static MathObject integrate(ExpressionNode root, String wrt) {
         MathObject integrated = new MathObject("");
         if (root instanceof BinaryNode binaryNode) {
@@ -187,10 +142,239 @@ public abstract class JParser {
             ExpressionNode right = binaryNode.getRightChild();
             integrated.operation(integrateExpression(left, right, binaryNode.getOperator(), wrt), "+");
         }
-
         return integrated;
     }
 
+    /**
+     * Create a user-defined function from a function definition expression (e.g. "f(x)=x^2").
+     *
+     * @param expression function definition
+     * @return parsed function {@link ExpressionNode} (as stored in the context)
+     */
+    public static ExpressionNode createFunction(String expression) {
+        return CONTEXT.addFunction(expression);
+    }
+
+    /**
+     * Create an internal {@link FunctionDefinition} from a polynomial expression and variable list.
+     * The generated identifier will be unique within the current context.
+     *
+     * @param expression polynomial expression
+     * @param variables variables used in the polynomial
+     * @return new {@link FunctionDefinition}
+     */
+    public static FunctionDefinition createFunctionFromPolynomial(String expression, String... variables) {
+        StringBuilder func = new StringBuilder();
+        String identifier = getSaltString();
+        while (CONTEXT.containsFunction(identifier)) {
+            identifier = getSaltString();
+        }
+        func.append(identifier).append("(");
+        int idx = 1;
+        for (String s : variables) {
+            func.append(s);
+            if (idx < variables.length) {
+                func.append(",");
+            }
+            idx++;
+        }
+        func.append(") = ").append(expression);
+        return new FunctionDefinition(identifier, Arrays.stream(variables).toList(), JParser.parse(expression));
+    }
+
+    /**
+     * Attempt to find roots for a polynomial expression. (Work in progress in original.)
+     *
+     * @param expression polynomial expression
+     * @param variables variable names
+     * @return list of roots as {@link MathObject}
+     */
+    public static List<MathObject> findRoots(String expression, String... variables) {
+        ExpressionNode body = createFunction(JParser.evaluate(createFunctionFromPolynomial(expression, variables).getExpression()).toString());
+        List<MathObject> objects = new ArrayList<>();
+        int rootsFound = 0;
+        int degree = findPolynomialDegree(body);
+        BigDecimal lastValue;
+        while (rootsFound < degree) {
+            rootsFound++;
+        }
+        return objects;
+    }
+
+    /**
+     * Walk the expression tree and produce a textual {@link MathObject} representation.
+     *
+     * @param root expression root
+     * @return textual {@link MathObject}
+     */
+    public static MathObject parseThroughTree(ExpressionNode root) {
+        if (root instanceof BinaryNode binaryNode) {
+            binaryNode.getLeftChild().setParent(binaryNode);
+            binaryNode.getRightChild().setParent(binaryNode);
+            MathObject object = new MathObject(parseThroughTree(binaryNode.getLeftChild()) + Operator.getFromOperator(binaryNode.getOperator()) + parseThroughTree(binaryNode.getRightChild()));
+            object.forceParenthesis();
+            return object;
+        } else if (root instanceof LiteralNode literalNode) {
+            return new MathObject(literalNode.getValue().toString());
+        } else if (root instanceof UnaryNode unaryNode) {
+            unaryNode.getChild().setParent(unaryNode);
+            MathObject object = parseThroughTree(unaryNode.getChild());
+            if (unaryNode.getSymbol().equals(UnaryNode.UnarySymbol.NEGATIVE)) {
+                object = new MathObject("-" + object);
+                object.forceParenthesis();
+            }
+            return object;
+        } else if (root instanceof VariableNode variableNode) {
+            MathObject object = new MathObject(variableNode.getName());
+            return object;
+        } else if (root instanceof FunctionCallNode functionCallNode) {
+            return parseThroughTree(CONTEXT.lookupFunction(functionCallNode.getName()).getBody());
+        } else if (root instanceof FunctionDefinitionNode functionDefinitionNode) {
+            return parseThroughTree(functionDefinitionNode.getBody());
+        }
+        else {
+            return new MathObject("");
+
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Matrix helpers (simple delegations)
+    // ---------------------------------------------------------------------
+
+    /**
+     * Perform row reduction (Gaussian elimination) on the provided matrix.
+     *
+     * @param matrix matrix to reduce
+     * @return reduced {@link Matrix}
+     */
+    public static Matrix rowReduce(Matrix matrix) {
+        return MatrixMath.rowReduce(matrix);
+    }
+
+    /**
+     * Convert the provided matrix to echelon/triangular form.
+     *
+     * @param matrix matrix to convert
+     * @return triangular {@link Matrix}
+     */
+    public static Matrix makeTriangular(Matrix matrix) {
+        return MatrixMath.makeTriangular(matrix);
+    }
+
+    /**
+     * Find the inverse of the provided matrix.
+     *
+     * @param matrix matrix to invert
+     * @return inverse {@link Matrix}
+     */
+    public static Matrix inverseMatrix(Matrix matrix) {
+        return MatrixMath.findInverse(matrix);
+    }
+
+    /**
+     * Compute the determinant of {@code matrix}.
+     *
+     * @param matrix matrix
+     * @return determinant as a {@link MathObject}
+     */
+    public static MathObject matrixDeterminant(Matrix matrix) {
+        return MatrixMath.findDeterminant(matrix);
+    }
+
+    // ---------------------------------------------------------------------
+    // Configuration / small helpers
+    // ---------------------------------------------------------------------
+
+    /**
+     * Get the configured numeric precision (number of decimal places).
+     *
+     * @return precision
+     */
+    public static int getCurrentPrecision() {
+        return currentPrecision;
+    }
+
+    /**
+     * Set the decimal format used when printing results.
+     *
+     * @param decimalPlaces number of decimal places
+     */
+    public static void setCurrentPrecision(int decimalPlaces) {
+        decimalFormat = new DecimalFormat("#." + "#".repeat(decimalPlaces));
+        currentPrecision = decimalPlaces;
+    }
+
+    /**
+     * Toggle usage of degrees for angle-based functions.
+     *
+     * @param degrees true for degrees, false for radians
+     */
+    public static void changeDegrees(boolean degrees) {
+        JParser.degrees = degrees;
+    }
+
+    /**
+     * Determine whether a {@link MathObject} should be considered zero (with epsilon).
+     *
+     * @param val numeric value to test
+     * @return true if value is approximately zero
+     */
+    public static boolean isZero(MathObject val) {
+        if (val.getValue() != null) {
+            return Math.abs(val.getValue().doubleValue()) <= 0.0000001;
+        } else {
+            return val.getName() != null && val.getName().isEmpty();
+        }
+    }
+
+    /**
+     * Normalize a {@link BigDecimal} to a string using configured precision.
+     *
+     * @param bd BigDecimal to normalize
+     * @return normalized string
+     */
+    public static String normalize(BigDecimal bd) {
+        return bd.round(new MathContext(getCurrentPrecision(), RoundingMode.HALF_UP)).stripTrailingZeros().toPlainString();
+    }
+
+    /**
+     * Normalize a {@link MathObject} by parsing and setting its numeric {@code value} and {@code name}.
+     *
+     * @param object object to normalize
+     */
+    public static void normalize(MathObject object) {
+        if (object.getValue() != null || (object.getName() != null && isNumeric(object.getName()))) {
+            object.setValue(BigDecimal.valueOf(Double.parseDouble(object.toString())));
+            object.setName(normalize(object.getValue()));
+        }
+    }
+
+    /**
+     * Check whether a string is a numeric representation.
+     *
+     * @param string input string
+     * @return true when fully numeric
+     */
+    public static boolean isNumeric(String string) {
+        ParsePosition pos = new ParsePosition(0);
+        NumberFormat.getInstance().parse(string, pos);
+        return string.length() == pos.getIndex();
+    }
+
+    // ---------------------------------------------------------------------
+    // Private / utility methods (implementation details)
+    // ---------------------------------------------------------------------
+
+    /**
+     * Integrate a binary expression by operator.
+     *
+     * @param left left child
+     * @param right right child
+     * @param operator operator between them
+     * @param wrt variable to integrate with respect to
+     * @return integrated {@link MathObject}
+     */
     private static MathObject integrateExpression(ExpressionNode left, ExpressionNode right, Operator operator, String wrt) {
         MathObject integrated = new MathObject("");
         if (left instanceof BinaryNode) {
@@ -202,17 +386,20 @@ public abstract class JParser {
 
         return switch (operator) {
             case EXP -> integrateExp(left, right, wrt);
-            case MULT ->  integrateMult(integrated, left, right, wrt);
+            case MULT -> integrateMult(integrated, left, right, wrt);
             case null, default -> integrated;
         };
     }
 
+    /**
+     * Integrate an exponent expression (x^n -> x^(n+1)/(n+1)).
+     */
     private static MathObject integrateExp(ExpressionNode left, ExpressionNode right, String wrt) {
         MathObject variable = evaluate(left);
         MathObject exponent = evaluate(right);
 
         if (exponent.getValue() != null) {
-            exponent.setValue(exponent.getValue().stripTrailingZeros().add(ONE));
+            exponent.setValue(exponent.getValue().add(new BigDecimal(1)));
         } else if (exponent.getName() != null) {
             exponent.setName(exponent.getName() + "+1");
             exponent.addParenthesis();
@@ -228,6 +415,9 @@ public abstract class JParser {
         return integrated;
     }
 
+    /**
+     * Integrate multiplication by combining integrals (simple product rule placeholder).
+     */
     private static MathObject integrateMult(MathObject accumulated, ExpressionNode left, ExpressionNode right, String wrt) {
         MathObject leftObject = integrate(left, wrt);
         MathObject rightObject = integrate(right, wrt);
@@ -237,20 +427,27 @@ public abstract class JParser {
         return accumulated;
     }
 
+    /**
+     * Compute derivative for arbitrary expression node trees.
+     *
+     * @param root expression root
+     * @param wrt variable
+     * @return derivative as {@link MathObject}
+     */
     private static MathObject findDerivative(ExpressionNode root, String wrt) {
-        parseThroughTree(root);
         MathObject derivative = new MathObject("");
+
         if (root instanceof BinaryNode binaryNode) {
             ExpressionNode left = binaryNode.getLeftChild();
             ExpressionNode right = binaryNode.getRightChild();
-            derivative.operation(differentiateExpression(left, right, binaryNode.getOperator(), wrt), "+");
+            derivative.combine(differentiateExpression(left, right, binaryNode.getOperator(), wrt));
         } else if (root instanceof LiteralNode literalNode) {
             if (literalNode.getParent() != null) {
                 if (literalNode.getParent() instanceof BinaryNode bin) {
                     if (bin.getOperator().equals(Operator.PLUS) || bin.getOperator().equals(Operator.MINUS)) {
                         return new MathObject(0);
-                    } else {
-                        return new MathObject(((BigDecimal) literalNode.getValue()).stripTrailingZeros());
+                    } else if (bin.getOperator().equals(Operator.MULT)){
+                        return new MathObject(((BigDecimal) literalNode.getValue()));
                     }
                 }
             }
@@ -258,17 +455,19 @@ public abstract class JParser {
         } else if (root instanceof VariableNode variableNode) {
             if (!variableNode.getName().equals(wrt)) {
                 return new MathObject(0);
-            } if (variableNode.getParent() != null) {
+            } else if (variableNode.getParent() != null) {
                 if (variableNode.getParent() instanceof BinaryNode binaryNode) {
                     if (binaryNode.getOperator().equals(Operator.PLUS) || binaryNode.getOperator().equals(Operator.MINUS)) {
                         return new MathObject("1");
                     }
                 } else if (variableNode.getParent() instanceof UnaryNode unaryNode) {
                     if (unaryNode.getSymbol().equals(UnaryNode.UnarySymbol.NEGATIVE)) {
-                        return new MathObject("-1");
+                        return new MathObject("1");
                     }
                     return new MathObject("1");
                 }
+            } else if (variableNode.getName().equals(wrt)) {
+                return new MathObject("1");
             }
             return new MathObject(variableNode.getName());
         } else if (root instanceof UnaryNode unaryNode) {
@@ -281,60 +480,90 @@ public abstract class JParser {
         return derivative;
     }
 
+    /**
+     * Differentiate a binary expression by operator.
+     */
     private static MathObject differentiateExpression(ExpressionNode left, ExpressionNode right, Operator operator, String wrt) {
         MathObject differentiated = new MathObject("");
         if (left instanceof BinaryNode) {
-            differentiated.operation(findDerivative(left, wrt), "+");
+            differentiated.combine(findDerivative(left, wrt));
         }
         if (right instanceof BinaryNode) {
-            differentiated.operation(findDerivative(right, wrt), "+");
+            differentiated.combine(findDerivative(right, wrt));
         }
 
         return switch (operator) {
             case EXP -> differentiateExp(left, right, wrt);
-            case MULT -> differentiateMult(differentiated, left);
+            case MULT -> differentiateMult(differentiated, left, right, wrt);
             case MINUS, PLUS -> differentiateAddSub(left, right, operator, wrt);
             case DIV -> differentiateDiv(left, right, wrt);
             default -> differentiated;
         };
     }
 
+    /**
+     * Differentiate exponent expressions (power rule simple form).
+     */
     private static MathObject differentiateExp(ExpressionNode left, ExpressionNode right, String wrt) {
         MathObject variable = evaluate(left);
         MathObject exp = evaluate(right);
+        MathObject expReduced;
+        exp.forceParenthesis();
+        variable.forceParenthesis();
 
-        if (!variable.toString().equals(wrt)) {
+        if (!variable.toString().contains(wrt)) {
             return new MathObject(0);
         }
-
         if (exp.getValue() != null) {
-            exp.setValue(exp.getValue().stripTrailingZeros());
+            expReduced = new MathObject(exp.getValue().subtract(BigDecimal.ONE));
+        } else {
+            expReduced = MathObject.combine(exp, new MathObject(BigDecimal.ONE), "-");
         }
-        exp.setName(exp.toString());
-        exp.operation(variable, "");
+        expReduced = evaluate(expReduced.toString());
+        if (expReduced.toString().length() > 1) {
+            expReduced.forceParenthesis();
+        }
+        if (!expReduced.toString().equals("1")) {
+            variable.combine(expReduced, "^");
+        }
+        exp = evaluate(exp.toString());
         MathObject differentiated = new MathObject("");
         differentiated.combine(exp);
-
-        MathObject expReduced = new MathObject(exp.getValue());
-        expReduced.operation(new MathObject(ONE), "-");
-        if (expReduced.getValue() != null && expReduced.getValue().doubleValue() > 1) {
-            expReduced.setValue(expReduced.getValue().stripTrailingZeros());
-            differentiated.operation(expReduced, "^");
-        }
+        differentiated.forceParenthesis();
+        differentiated.combine(variable, "*");
         return differentiated;
     }
 
-    private static MathObject differentiateMult(MathObject accumulated, ExpressionNode left) {
-        MathObject leftObject = evaluate(left);
-        if (!accumulated.getName().isEmpty()) {
-            accumulated.addParenthesis();
+    /**
+     * Differentiate multiplication (product rule placeholder/combiner).
+     */
+    private static MathObject differentiateMult(MathObject accumulated, ExpressionNode left, ExpressionNode right, String wrt) {
+        MathObject leftObject = findDerivative(left, wrt);
+        MathObject rightObject = findDerivative(right, wrt);
+        normalize(leftObject);
+        normalize(rightObject);
+        if (leftObject.toString().equals(wrt) || rightObject.toString().equals(wrt)) {
+            if (leftObject.toString().equals(wrt)) {
+                return rightObject.combine(accumulated);
+            }
+            if (rightObject.toString().equals(wrt)) {
+                return leftObject.combine(accumulated);
+            }
+        } else if (!leftObject.toString().contains(wrt) && !rightObject.toString().contains(wrt)){
+            MathObject zero = new MathObject("0");
+            return zero.combine(accumulated);
         }
-        if (leftObject.getValue() != null) {
-            leftObject.setValue(leftObject.getValue().stripTrailingZeros());
+        if (accumulated.toString().isEmpty()) {
+            if (!leftObject.toString().equals("1") && !rightObject.toString().equals("1")) {
+                leftObject.combine(rightObject, "*");
+            }
         }
-        return MathObject.combine(leftObject, accumulated);
+        return leftObject.combine(accumulated);
     }
 
+    /**
+     * Differentiate addition/subtraction.
+     */
     private static MathObject differentiateAddSub(ExpressionNode left, ExpressionNode right, Operator operator, String wrt) {
         MathObject leftObject = findDerivative(left, wrt);
         MathObject rightObject = findDerivative(right, wrt);
@@ -365,6 +594,9 @@ public abstract class JParser {
         return combined;
     }
 
+    /**
+     * Differentiate division using the quotient rule.
+     */
     private static MathObject differentiateDiv(ExpressionNode left, ExpressionNode right, String wrt) {
         MathObject leftObject = evaluate(left);
         MathObject rightObject = evaluate(right);
@@ -383,59 +615,16 @@ public abstract class JParser {
         MathObject top = MathObject.combine(topLeft, topRight, " - ");
         top.addParenthesis();
         bottom.addParenthesis();
-        return MathObject.combine(top, bottom, " / ");
+        return MathObject.combine(top, bottom, "/");
     }
 
-
-    public static List<MathObject> findRoots(String expression, String... variables) {
-        ExpressionNode body = createFunction(createFunctionFromPolynomial(expression, variables));
-        List<MathObject> objects = new ArrayList<>();
-        int rootsFound = 0;
-        int degree = findPolynomialDegree(body);
-        BigDecimal lastValue;
-        while (rootsFound < degree) {
-
-            rootsFound++;
-        }
-
-        return objects;
-    }
-
-    public static String parseThroughTree(ExpressionNode root) {
-        if (root instanceof BinaryNode binaryNode) {
-            binaryNode.getLeftChild().setParent(binaryNode);
-            binaryNode.getRightChild().setParent(binaryNode);
-            return parseThroughTree(binaryNode.getLeftChild()) + Operator.getFromOperator(binaryNode.getOperator()) + parseThroughTree(binaryNode.getRightChild());
-        } else if (root instanceof LiteralNode literalNode) {
-            return literalNode.getValue().toString();
-        } else if (root instanceof UnaryNode unaryNode) {
-            unaryNode.getChild().setParent(unaryNode);
-            return parseThroughTree(unaryNode.getChild());
-        } else if (root instanceof VariableNode variableNode) {
-            return variableNode.getValue().toString();
-        } else {
-            return "";
-        }
-    }
-
-    public static String createFunctionFromPolynomial(String expression, String... variables) {
-        StringBuilder func = new StringBuilder();
-        String identifier = getSaltString();
-        while (CONTEXT.containsFunction(identifier)) {
-            identifier = getSaltString();
-        }
-        func.append(identifier).append("(");
-        int idx = 1;
-        for (String s : variables) {
-            func.append(s);
-            if (idx < variables.length) {
-                func.append(",");
-            }
-        }
-        func.append(") = ").append(expression);
-        return func.toString();
-    }
-
+    /**
+     * Determine polynomial degree by walking expression tree.
+     *
+     * @param body expression root
+     * @param currentHighestDegree optional current highest degree
+     * @return highest degree found
+     */
     private static int findPolynomialDegree(ExpressionNode body, int... currentHighestDegree) {
         if (currentHighestDegree.length == 0) {
             currentHighestDegree = new int[]{1};
@@ -453,28 +642,18 @@ public abstract class JParser {
     }
 
     /**
-     * Determine whether a value should be considered zero (with epsilon tolerance).
+     * Generate a short random alphabetic identifier.
      *
-     * @param val numeric value to test
-     * @return true if value is (approximately) zero
+     * @return 3-character random uppercase string
      */
-    public static boolean isZero(MathObject val) {
-        if (val.getValue() != null) {
-            return Math.abs(val.getValue().doubleValue()) <= 0.0000001;
-        } else {
-            return val.getName() != null && val.getName().isEmpty();
-        }
-    }
-
     private static String getSaltString() {
         String SALTCHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         StringBuilder salt = new StringBuilder();
         Random rnd = new Random();
-        while (salt.length() < 3) { // length of the random string.
+        while (salt.length() < 3) {
             int index = (int) (rnd.nextFloat() * SALTCHARS.length());
             salt.append(SALTCHARS.charAt(index));
         }
-        String saltStr = salt.toString();
-        return saltStr;
+        return salt.toString();
     }
 }
