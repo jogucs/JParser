@@ -84,6 +84,8 @@ public abstract class JParser {
         return object;
     }
 
+
+
     /**
      * Tokenize and parse the given expression string to an {@link ExpressionNode}.
      *
@@ -114,7 +116,7 @@ public abstract class JParser {
      * @return evaluated {@link MathObject}
      */
     public static MathObject evaluate(ExpressionNode node) {
-        return evaluate(EVALUATOR.evaluate(node, CONTEXT).toString());
+        return EVALUATOR.evaluate(node, CONTEXT);
     }
 
     /**
@@ -463,6 +465,7 @@ public abstract class JParser {
         return accumulated;
     }
 
+
     /**
      * Compute derivative for arbitrary expression node trees.
      *
@@ -694,4 +697,36 @@ public abstract class JParser {
         }
         return salt.toString();
     }
+
+    public static boolean combineSymbols(ExpressionNode node) {
+        if (node instanceof BinaryNode binaryNode &&
+                (binaryNode.getOperator().equals(Operator.MINUS) || binaryNode.getOperator().equals(Operator.PLUS))) {
+            if (binaryNode.getOperator().equals(Operator.MINUS)) {
+                if (binaryNode.getLeftChild() instanceof BinaryNode && binaryNode.getRightChild() instanceof BinaryNode) {
+                    combineSymbols(binaryNode.getLeftChild());
+                    combineSymbols(binaryNode.getRightChild());
+                } else if (binaryNode.getLeftChild() instanceof UnaryNode leftNode && leftNode.getSymbol().equals(UnaryNode.UnarySymbol.NEGATIVE)) {
+                    binaryNode.setOperator(Operator.PLUS);
+                    binaryNode.setLeftChild(leftNode.getChild());
+                } else if (binaryNode.getRightChild() instanceof UnaryNode rightNode && rightNode.getSymbol().equals(UnaryNode.UnarySymbol.NEGATIVE)) {
+                    binaryNode.setOperator(Operator.PLUS);
+                    binaryNode.setRightChild(rightNode.getChild());
+                }
+            } else if (binaryNode.getOperator().equals(Operator.PLUS)) {
+                if (binaryNode.getLeftChild() instanceof BinaryNode && binaryNode.getRightChild() instanceof BinaryNode) {
+                    combineSymbols(binaryNode.getLeftChild());
+                    combineSymbols(binaryNode.getRightChild());
+                } else if (binaryNode.getLeftChild() instanceof UnaryNode leftnode && leftnode.getSymbol().equals(UnaryNode.UnarySymbol.NEGATIVE)) {
+                    binaryNode.setOperator(Operator.MINUS);
+                    binaryNode.setLeftChild(leftnode.getChild());
+                } else if (binaryNode.getRightChild() instanceof UnaryNode rightNode && rightNode.getSymbol().equals(UnaryNode.UnarySymbol.NEGATIVE)) {
+                    binaryNode.setOperator(Operator.MINUS);
+                    binaryNode.setRightChild(rightNode.getChild());
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
 }

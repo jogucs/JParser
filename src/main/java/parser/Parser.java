@@ -63,6 +63,7 @@ public class Parser {
     public ExpressionNode parseExpression() {
         ExpressionNode body = parseSign();
         JParser.parseThroughTree(body);
+        JParser.combineSymbols(body);
         return body;
     }
 
@@ -94,7 +95,11 @@ public class Parser {
         while (match(Operator.DIV) || match(Operator.MULT)) {
             Token token = consume();
             ExpressionNode right = parseExponent();
-            left = new BinaryNode(token, left, right);
+            if (right instanceof VariableNode || left instanceof VariableNode) {
+                left = new BinaryNode(token, left, right, true);
+            } else {
+                left = new BinaryNode(token, left, right);
+            }
         }
 
         return left;

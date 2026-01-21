@@ -1,6 +1,7 @@
 package nodes;
 
 import tokenizer.Operator;
+import tokenizer.OperatorToken;
 import tokenizer.Token;
 
 /**
@@ -14,17 +15,19 @@ public class BinaryNode extends ExpressionNode {
     /**
      * Left operand of the binary operation.
      */
-    private final ExpressionNode leftChild;
+    private ExpressionNode leftChild;
 
     /**
      * Right operand of the binary operation.
      */
-    private final ExpressionNode rightChild;
+    private ExpressionNode rightChild;
 
     /**
      * Token that contains the operator for this binary node.
      */
-    private final Token token;
+    private Token token;
+
+    private boolean attachedToVar = false;
 
     /**
      * Create a BinaryNode with the given operator token and operand nodes.
@@ -39,6 +42,11 @@ public class BinaryNode extends ExpressionNode {
         this.rightChild = rightChild;
     }
 
+    public BinaryNode(Token token, ExpressionNode leftChild, ExpressionNode rightChild, boolean attachedToVar) {
+        this(token, leftChild, rightChild);
+        this.attachedToVar = attachedToVar;
+    }
+
     /**
      * Return the right operand node.
      *
@@ -46,6 +54,14 @@ public class BinaryNode extends ExpressionNode {
      */
     public ExpressionNode getRightChild() {
         return rightChild;
+    }
+
+    public void setRightChild(ExpressionNode rightChild) {
+        this.rightChild = rightChild;
+    }
+
+    public void setLeftChild(ExpressionNode leftChild) {
+        this.leftChild = leftChild;
     }
 
     /**
@@ -64,6 +80,14 @@ public class BinaryNode extends ExpressionNode {
      */
     public Operator getOperator() {
         return token.getValue();
+    }
+
+    public void setOperator(Operator operator) {
+        this.token = new OperatorToken(Operator.getFromOperator(operator), operator);
+    }
+
+    public boolean isAttachedToVar() {
+        return attachedToVar;
     }
 
     /**

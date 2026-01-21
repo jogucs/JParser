@@ -104,86 +104,22 @@ public class Evaluator {
                 };
             }
         } else if (node instanceof BinaryNode bin) {
-            // Handle binary operations (e.g., addition, subtraction, multiplication, etc.).
-            MathObject leftObj = evaluate(bin.getLeftChild(), context);
-            MathObject rightObj = evaluate(bin.getRightChild(), context);
-            if ((!JParser.isNumeric(leftObj.toString()) && leftObj.getName() != null) || (!JParser.isNumeric(rightObj.toString()) && rightObj.getName() != null)) {
-                // Symbolic binary operations.
-                if (leftObj.getValue() != null) {
-                    leftObj.setValue(leftObj.getValue());
-                }
-                if (rightObj.getValue() != null) {
-                    rightObj.setValue(rightObj.getValue());
-                }
-                String op = operatorToString(bin.getOperator());
-                String sym;
-                if (!op.equals("*")) {
-                    sym = leftObj + "" + op + "" + rightObj;
-                } else {
-                    sym =  leftObj + "" + rightObj;
-                }
-                MathObject symObject = new MathObject(sym);
-                symObject.forceParenthesis();
-                return symObject;
-            }
-
-            // Numeric binary operations.
-            BigDecimal left = leftObj.getValue();
-            BigDecimal right = rightObj.getValue();
-
-            return switch (bin.getOperator()) {
-                case PLUS -> new MathObject(left.add(right));
-                case MINUS -> new MathObject(left.subtract(right));
-                case MULT -> new MathObject(left.multiply(right));
-                case DIV -> new MathObject(left.divide(right, 200, RoundingMode.HALF_UP));
-                case GT -> new MathObject((left.doubleValue() > right.doubleValue() ? 1 : 0));
-                case LT -> new MathObject((left.doubleValue() < right.doubleValue() ? 1 : 0));
-                case GTE -> new MathObject((left.doubleValue() >= right.doubleValue() ? 1 : 0));
-                case LTE -> new MathObject((left.doubleValue() <= right.doubleValue() ? 1 : 0));
-                case NEQ -> new MathObject((left.doubleValue() != right.doubleValue() ? 1 : 0));
-                case EQUAL -> new MathObject((left == right ? 1 : 0));
-                case PEQUAL -> new MathObject(left.add(left.add(right)));
-                case EXP -> new MathObject(evalExponent(left.doubleValue(), right.doubleValue()));
-            };
-        } else if (node instanceof SpaceNode spaceNode) {
-            return new MathObject(0.0);
-        } else {
-            // Throw an error for unknown node types.
-            throw new RuntimeException("Unknown node type " + node);
+            MathObject object;
+            MathObject left = evaluate(bin.getLeftChild(), context);
+            MathObject right = evaluate(bin.getRightChild(), context);
+            object = combineTerms(left, right, bin.getOperator());
+            object.addParenthesis();
+            object.removeTrailingParenthesis();
+            return object;
         }
-    }
-
-    /**
-     * Evaluates the exponentiation operation.
-     *
-     * @param left  The base value.
-     * @param right The exponent value.
-     * @return The result of raising `left` to the power of `right`.
-     */
-    private double evalExponent(double left, double right) {
-        double val = left;
-        for (int i = 1; i < right; i++) {
-            val *= left;
-        }
-        return val;
+        return null;
     }
 
     private MathObject combineTerms(MathObject left, MathObject right, Operator operator) {
-        switch (operator) {
-            case MULT -> {
-                // Case for left being variable, right being literal
-                if (left.getName() != null && right.getValue() != null) {
-                    return MathObject.combine(right, left, "*");
-                } else if (left.getName() == null && right.getValue() == null) { // Case for left being number, right being variable
-                    return MathObject.combine(left, right, "*");
-                } else {
-                    return new MathObject(left.getValue().multiply(right.getValue()));
-                }
-            } case PLUS -> {
-
-            }
+        if (operator.equals(Operator.MULT) && (left.findVariable() != null || right.findVariable() != null)) {
+            return MathObject.combine(left, right);
         }
-        return left;
+        return left.operation(right, operatorToString(operator));
     }
 
     /**

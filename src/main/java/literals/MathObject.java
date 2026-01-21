@@ -240,10 +240,9 @@ public class MathObject {
     public MathObject removeTrailingParenthesis() {
         if (this.name == null || this.name.length() < 2 || !this.name.contains("(")) return this;
         String s = this.name;
-        while (s.length() >= 2 && s.charAt(0) == '(' && s.charAt(s.length() - 1) == ')' && !isSurroundedBySinglePair(s)) {
+        while (s.length() >= 2 && s.charAt(0) == '(' && s.charAt(s.length() - 1) == ')' && isSurroundedBySinglePair(s)) {
             s = s.substring(1, s.length() - 1);
         }
-        s = s.substring(1, s.length() - 1);
         this.name = s;
         return this;
     }

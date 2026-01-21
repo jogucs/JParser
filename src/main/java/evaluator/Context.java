@@ -63,7 +63,6 @@ public class Context {
         put("abs", args -> BigDecimal.valueOf(Math.abs(args[0].doubleValue())));
         put("ln", args -> BigDecimal.valueOf(Math.log(args[0].doubleValue())));
         put("log", args -> BigDecimal.valueOf(Math.log10(args[0].doubleValue())));
-        // 'int' expects two args: upper and lower limits (placeholder implementation).
         put("fac", args -> factorial(args[0]));
         put("perm", args -> permutation(args[0], args[1]));
         put("comb", args -> combination(args[0], args[1]));
@@ -232,5 +231,4 @@ public class Context {
 
         return a;
     }
-
 }
