@@ -1,9 +1,8 @@
 package evaluator;
 
-import literals.MathObject;
+import literals.Term;
 import literals.Matrix;
 import literals.Vector;
-import nodes.ExpressionNode;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -76,8 +75,8 @@ public abstract class MatrixMath {
                 if (JParser.isZero(matrix.getValue(rowIdx, colIdx))) {
                     continue;
                 }
-                MathObject x = matrix.getValue(rowIdx, colIdx);
-                MathObject y = matrix.getValue(rowIdx - 1, colIdx);
+                Term x = matrix.getValue(rowIdx, colIdx);
+                Term y = matrix.getValue(rowIdx - 1, colIdx);
                 if (x.getValue() != null && y.getValue() != null) {
                     BigDecimal xVal = x.getValue();
                     BigDecimal yVal = y.getValue();
@@ -89,36 +88,6 @@ public abstract class MatrixMath {
         }
         prettify(matrix);
         return matrix;
-    }
-
-    private static boolean isUpperTriangular(Matrix matrix) {
-        if (matrix.getRowSize() < 2) {
-            return false;
-        }
-
-        for (int i = 0; i < matrix.getRowSize(); i++) {
-            for (int j = 0; j < i; j++) {
-                if (!JParser.isZero(matrix.getValue(i, j))) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    private static boolean isLowerTriangle(Matrix matrix) {
-        if (matrix.getRowSize() < 2) {
-            return false;
-        }
-
-        for (int i = 0; i < matrix.getRowSize(); i++) {
-            for (int j = 0; i > j; j++) {
-                if (JParser.isZero(matrix.getValue(j, i))) {
-                    return false;
-                }
-            }
-        }
-        return true;
     }
 
     private static void format(Matrix matrix) {
@@ -158,7 +127,7 @@ public abstract class MatrixMath {
         return newMatrix;
     }
 
-    public static MathObject findCharacteristicPolynomial(Matrix matrixToFind) {
+    public static Term findCharacteristicPolynomial(Matrix matrixToFind) {
         Matrix matrix = matrixToFind.clone();
         int colSize = matrix.getColSize();
         int rowSize = matrix.getRowSize();
@@ -167,9 +136,9 @@ public abstract class MatrixMath {
             throw new RuntimeException("Unable to find characteristic polynomial for non-square matrix");
         }
         for (int i = 0; i < colSize; i++) {
-            matrix.setValue(i, i, new MathObject(matrix.getValue(i, i) + "-λ"));
+            matrix.setValue(i, i, new Term(matrix.getValue(i, i) + "-λ"));
         }
-        MathObject object = findDeterminantLaplace(matrix);
+        Term object = findDeterminantLaplace(matrix);
         object.setName(object.getName().substring(0, object.getName().length() - 1));
         return JParser.evaluate(object.toString());
     }
@@ -180,10 +149,10 @@ public abstract class MatrixMath {
         return rowReduce(added).getColumns().getLast();
     }
 
-    public static MathObject findDeterminant(Matrix matrixToFindDeterminant) {
+    public static Term findDeterminant(Matrix matrixToFindDeterminant) {
 
-        MathObject determinant = new MathObject("1");
-        MathObject scalar;
+        Term determinant = new Term("1");
+        Term scalar;
         Matrix echelon = makeTriangular(matrixToFindDeterminant);
         for (int i = 0; i < matrixToFindDeterminant.getColSize(); i++) {
             scalar = echelon.getValue(i, i);
@@ -193,32 +162,32 @@ public abstract class MatrixMath {
         return determinant;
     }
 
-    public static MathObject findDeterminantLaplace(Matrix matrixToFindDeterminate, int... colIdx) {
+    private static Term findDeterminantLaplace(Matrix matrixToFindDeterminate, int... colIdx) {
         int colSize = matrixToFindDeterminate.getColSize();
         int rowSize = matrixToFindDeterminate.getRowSize();
         if (colIdx.length == 0) {
             colIdx = new int[]{0};
         }
         if (colIdx[0] == colSize) {
-            return new MathObject("");
+            return new Term("");
         }
         if (colSize != rowSize) {
             throw new RuntimeException("Unable to find determinate for non-square matrix");
         }
 
-        MathObject determinant;
-        MathObject currentScalar = matrixToFindDeterminate.getValue(0, colIdx[0]);
-        MathObject ad;
-        MathObject bc;
-        MathObject ad_bc;
+        Term determinant;
+        Term currentScalar = matrixToFindDeterminate.getValue(0, colIdx[0]);
+        Term ad;
+        Term bc;
+        Term ad_bc;
         Matrix matrix = deleteRowCol(matrixToFindDeterminate, 0, colIdx[0]);
         if (matrix.getColSize() == 2) {
-            MathObject a = matrix.getValue(0, 0);
-            MathObject d = matrix.getValue(1, 1);
-            ad = new MathObject("(" + a + ") * (" + d + ")");
-            MathObject b = matrix.getValue(0, 1);
-            MathObject c = matrix.getValue(1, 0);
-            bc = new MathObject("(" + b + ") * (" + c + ")");
+            Term a = matrix.getValue(0, 0);
+            Term d = matrix.getValue(1, 1);
+            ad = new Term("(" + a + ") * (" + d + ")");
+            Term b = matrix.getValue(0, 1);
+            Term c = matrix.getValue(1, 0);
+            bc = new Term("(" + b + ") * (" + c + ")");
             ad_bc = ad;
             ad_bc = ad_bc.operation(bc, "-");
             ad_bc.addParenthesis();
@@ -237,13 +206,13 @@ public abstract class MatrixMath {
         return determinant;
     }
 
-    private static MathObject cofactor(Matrix matrix, int row, int col) {
+    private static Term cofactor(Matrix matrix, int row, int col) {
         return findDeterminant(deleteRowCol(matrix, row, col));
     }
 
     private static Matrix multiplyMatrix(Matrix matrix, BigDecimal scalar) {
         for (Vector vector : matrix.getColumns()) {
-            for (MathObject object : vector.getBody()) {
+            for (Term object : vector.getBody()) {
                 object.setValue(object.getValue().multiply(scalar));
             }
         }
@@ -287,7 +256,7 @@ public abstract class MatrixMath {
     private static void rowSwap(Matrix matrix, int rowIndex, int rowIndex2) {
         int numCols = matrix.getColSize();
 
-        MathObject hold;
+        Term hold;
 
         for (int k = 0; k < numCols; k++) {
             hold = matrix.getValue(rowIndex2, k, 0);
@@ -420,7 +389,7 @@ public abstract class MatrixMath {
         int idx = 0;
         for (Vector vector : matrix.getColumns()) {
             if (isNonZeroColumn(matrix, idx, 0)) {
-                for (MathObject d : vector.getBody()) {
+                for (Term d : vector.getBody()) {
                     if (JParser.isZero(d)) {
                         vector.setValue(idx, BigDecimal.valueOf(Long.parseLong(df.format(0))));
                     } else if (d.getValue() != null) {

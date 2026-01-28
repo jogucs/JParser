@@ -1,8 +1,6 @@
 package literals;
 
 import evaluator.JParser;
-import nodes.ExpressionNode;
-import nodes.VectorNode;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -22,15 +20,15 @@ public class Vector {
     /**
      * Underlying list of elements comprising the vector.
      */
-    private List<MathObject> body = new ArrayList<>();
+    private List<Term> body = new ArrayList<>();
 
-    public Vector(List<MathObject> body) {
+    public Vector(List<Term> body) {
         this.body = body;
     }
 
     public Vector(double... values) {
         for (double doub : values) {
-            this.body.add(new MathObject(doub));
+            this.body.add(new Term(doub));
         }
     }
 
@@ -42,10 +40,10 @@ public class Vector {
      * @throws IndexOutOfBoundsException if {@code pos} is out of range for the list
      */
     public void setValue(int pos, BigDecimal value) {
-        this.body.set(pos, new MathObject(value));
+        this.body.set(pos, new Term(value));
     }
 
-    public void setValue(int pos, MathObject object) {
+    public void setValue(int pos, Term object) {
         this.body.set(pos, object);
     }
 
@@ -66,7 +64,7 @@ public class Vector {
      *
      * @return list of {@link Double} elements
      */
-    public List<MathObject> getBody() {
+    public List<Term> getBody() {
         return body;
     }
 
@@ -76,7 +74,7 @@ public class Vector {
      * @return {@code true} if every element equals {@code 0.0}, {@code false} otherwise
      */
     public boolean isZero() {
-        for (MathObject object : body) {
+        for (Term object : body) {
             if (JParser.isZero(object)) {
                 return false;
             }

@@ -1,6 +1,6 @@
 package evaluator;
 
-import literals.MathObject;
+import literals.Term;
 import nodes.*;
 import tokenizer.Operator;
 import tokenizer.OperatorToken;
@@ -27,7 +27,7 @@ public class Simplifier {
      * <p>If the node is a {@link BinaryNode}, this method collects additive
      * terms from both left and right sides, tries to pairwise combine them
      * (including creating explicit exponent and multiplication nodes where
-     * necessary), and builds a combined {@link MathObject} string which is
+     * necessary), and builds a combined {@link Term} string which is
      * then parsed back into an {@link ExpressionNode} by {@code JParser}.</p>
      *
      * @param node the expression node to factor
@@ -49,7 +49,7 @@ public class Simplifier {
             collectTerms(right, 1, terms, signs);
 
             // Accumulate the resulting expression as a MathObject (string-backed).
-            MathObject result = new MathObject("");
+            Term result = new Term("");
             int sign;
 
             // Try pairing each term from left with each term from right.
@@ -109,35 +109,35 @@ public class Simplifier {
     }
 
     /**
-     * Combine two expression nodes into a single {@link MathObject} according to
+     * Combine two expression nodes into a single {@link Term} according to
      * common algebraic heuristics.
      *
-     * <p>This method evaluates both subexpressions to {@link MathObject} forms,
+     * <p>This method evaluates both subexpressions to {@link Term} forms,
      * inspects for matching variables and exponents, and attempts to combine like
      * terms (e.g. x^a * x^b => x^(a+b)). If only one side contains a variable,
      * it uses the other as a multiplier. Otherwise it performs a generic
-     * operation via {@link MathObject#operation}.</p>
+     * operation via {@link Term#operation}.</p>
      *
      * @param left the left expression node
      * @param right the right expression node
      * @param operator the operator string to use when combining (e.g. "*")
-     * @return a new {@link MathObject} representing the combined expression
+     * @return a new {@link Term} representing the combined expression
      */
-    private static MathObject combineTerms(ExpressionNode left, ExpressionNode right, String operator) {
-        MathObject leftObject = JParser.EVALUATOR.evaluate(left, JParser.CONTEXT).removeTrailingParenthesis();
-        MathObject rightObject = JParser.EVALUATOR.evaluate(right, JParser.CONTEXT).removeTrailingParenthesis();
+    private static Term combineTerms(ExpressionNode left, ExpressionNode right, String operator) {
+        Term leftObject = JParser.EVALUATOR.evaluate(left, JParser.CONTEXT).removeTrailingParenthesis();
+        Term rightObject = JParser.EVALUATOR.evaluate(right, JParser.CONTEXT).removeTrailingParenthesis();
 
         // Find variable names and exponents (if any) inside the evaluated MathObject values.
         String varInLeft = leftObject.findVariable();
         String varInRight = rightObject.findVariable();
         String leftExp = leftObject.findExponent();
         String rightExp = rightObject.findExponent();
-        MathObject combined;
+        Term combined;
 
         // If both sides have the same variable, add exponents: x^a * x^b -> x^(a+b)
         if (varInLeft != null && varInLeft.equals(varInRight)) {
-            MathObject newExp = JParser.evaluate(leftExp + "+" + rightExp);
-            combined = new MathObject(leftObject + "^" + newExp);
+            Term newExp = JParser.evaluate(leftExp + "+" + rightExp);
+            combined = new Term(leftObject + "^" + newExp);
             return combined;
         } else if (varInLeft != null) {
             // Left contains a variable, right is treated as multiplicative factor.

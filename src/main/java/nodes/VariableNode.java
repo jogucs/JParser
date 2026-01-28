@@ -1,6 +1,6 @@
 package nodes;
 
-import literals.MathObject;
+import literals.Term;
 
 /**
  * AST node representing a variable reference in an expression.
@@ -15,8 +15,8 @@ public class VariableNode extends ExpressionNode{
      */
     private String name;
 
-    private MathObject exponent;
-    private MathObject coefficient;
+    private Term exponent;
+    private Term coefficient;
 
     /**
      * Create a VariableNode for the given identifier.
@@ -27,19 +27,19 @@ public class VariableNode extends ExpressionNode{
         this.name = name;
     }
 
-    public void setExponent(MathObject exponent) {
+    public void setExponent(Term exponent) {
         this.exponent = exponent;
     }
 
-    public MathObject getExponent() {
+    public Term getExponent() {
         return exponent;
     }
 
-    public MathObject getCoefficient() {
+    public Term getCoefficient() {
         return coefficient;
     }
 
-    public void setCoefficient(MathObject coefficient) {
+    public void setCoefficient(Term coefficient) {
         this.coefficient = coefficient;
     }
 

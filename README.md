@@ -1,22 +1,22 @@
 # JParser
-Math expression parser and evaluator, written from scratch in Java.\
-\
-This algorithm goes through 3 stages:
-1. Tokenizing: transforms the expression into a token list to feed into the parser.
-2. Parsing: [recursive descent](https://en.wikipedia.org/wiki/Recursive_descent_parser) goes through token list and forms an AST.
-3. Evaluating: the actual math to calculate an expression.
+Math expression parser/scientific calculator written from scratch in Java.
 # Features
 **Math Functions**:
-  - sin, cos, tan, sinh, cosh, tanh, asin, acos, atan
+  - sin, cos, tan, cot, sec, csc sinh, cosh, tanh, asin, acos, atan, acot, asec, acsc (in radians or degrees)
   - pi, e
   - ln (natural log), log (base 10)
   - abs
   - sqrt, cbrt
-  - Radians/degrees
+  - fac, perm, comb, mod 
   - Any user defined functions
+
+**Algebra**:
+- Factorization
+- Basic root finding, uses Newton-Raphsom method (currently WIP)
 
 **Calculus**
 - Differentiation
+- Summation
 
 **Matrices**:
 - Row reduction
@@ -30,11 +30,11 @@ This algorithm goes through 3 stages:
 **Matrix Math**
   ```
   Matrix matrix = new Matrix("[1 3 5][8 30 2][1 89 2]");
-  evaluator.JParser.echelonForm(matrix); ->
+  JParser.makeTriangular(matrix); ->
     [1.0 8.0 1.0 ]
     [0.0 6.0 86.0 ]
     [0.0 0.0 541.6666666666666 ]
-  evaluator.JParser.rowReduce(matrix); ->
+  JParser.rowReduce(matrix); ->
     [1.0 0.0 0.0 ]
     [0.0 1.0 0.0 ]
     [0.0 0.0 1.0 ]
@@ -42,6 +42,6 @@ This algorithm goes through 3 stages:
 **User Defined Functions**
   ```
     String func = "f(x, y, z) = x^2 + 2z^3 - 8.2y^4";
-    evaluator.JParser.createFunction(func); -> can be used in any context now.
-    evaluator.JParser.evaluate("f(3, 5, 9)"); -> returns -4954.0
+    JParser.createFunction(func); -> can be used in any context now.
+    JParser.evaluate("f(3, 5, 9)"); -> returns -4954.0
   ```

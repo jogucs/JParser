@@ -1,7 +1,8 @@
 package evaluator;
 
 import literals.FunctionDefinition;
-import literals.MathObject;
+import literals.NativeFunction;
+import literals.Term;
 import nodes.ExpressionNode;
 import nodes.FunctionDefinitionNode;
 import parser.Parser;
@@ -9,7 +10,6 @@ import tokenizer.Tokenizer;
 
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.function.Function;
 
 /**
  * Evaluation context that holds variable values, user-defined functions, and native functions.
@@ -27,10 +27,26 @@ public class Context {
      * Map of variable names to numeric values available in this context.
      * Pre-populated with mathematical constants.
      */
-    public Map<String, Double> variables = new HashMap<>()
+    public static Map<String, Double> variables = new HashMap<>()
     {{
         put("e", 2.718281828459045235360287471352);
         put("pi", 3.1415926535897932384626433);
+    }};
+
+    public static Map<String, String[]> trigonometricDerivatives = new HashMap<>()
+    {{
+        put("sin", new String[]{"cos"});
+        put("cos", new String[]{"-sin"});
+        put("tan", new String[]{"sec^2"});
+        put("cot", new String[]{"-csc^2"});
+        put("sec", new String[]{"sec", "tan"});
+        put("csc", new String[]{"-csc", "cot"});
+        put("arcsin", new String[]{"1/(sqrt(1-x^2))"});
+        put("arccos", new String[]{"(-1)/(sqrt(1-x^2))"});
+        put("arctan", new String[]{"1/(x^2 + 1)"});
+        put("arccot", new String[]{"(-1)/(x^2 + 1)"});
+        put("arcsec", new String[]{"1/(abs(x)*sqrt(x^2-1))"});
+        put("arccsc", new String[]{"(-1)/(abs(x)*sqrt(x^2-1))"});
     }};
 
     /**
@@ -38,37 +54,6 @@ public class Context {
      * Functions are added by parsing a function definition expression and stored here.
      */
     public Map<String, FunctionDefinition> functions = new HashMap<>();
-
-    /**
-     * Map of native (built-in) function names to their implementations.
-     * Each implementation is a function that accepts a double\[\] of arguments and returns a Double.
-     *
-     * <p>
-     * Example native functions: cos, sin, tan, sqrt, ln, log, etc.
-     * The {@code int} function here is a placeholder that calls {@link #integral(double, double)}.
-     * </p>
-     */
-    public Map<String, Function<BigDecimal[], BigDecimal>> nativeFunctions = new HashMap<>() {{
-        put("cos", args -> BigDecimal.valueOf(Math.cos(args[0].doubleValue())));
-        put("sin", args -> BigDecimal.valueOf(Math.sin((args[0].doubleValue()))));
-        put("tan", args -> BigDecimal.valueOf(Math.tan(args[0].doubleValue())));
-        put("tanh", args -> BigDecimal.valueOf(Math.tanh(args[0].doubleValue())));
-        put("sinh", args -> BigDecimal.valueOf(Math.sinh(args[0].doubleValue())));
-        put("cosh", args -> BigDecimal.valueOf(Math.cosh(args[0].doubleValue())));
-        put("asin", args -> BigDecimal.valueOf(Math.asin(args[0].doubleValue())));
-        put("acos", args -> BigDecimal.valueOf(Math.acos(args[0].doubleValue())));
-        put("atan", args -> BigDecimal.valueOf(Math.atan(args[0].doubleValue())));
-        put("cbrt", args -> BigDecimal.valueOf(Math.cbrt(args[0].doubleValue())));
-        put("sqrt", args -> BigDecimal.valueOf(Math.sqrt(args[0].doubleValue())));
-        put("abs", args -> BigDecimal.valueOf(Math.abs(args[0].doubleValue())));
-        put("ln", args -> BigDecimal.valueOf(Math.log(args[0].doubleValue())));
-        put("log", args -> BigDecimal.valueOf(Math.log10(args[0].doubleValue())));
-        put("fac", args -> factorial(args[0]));
-        put("perm", args -> permutation(args[0], args[1]));
-        put("comb", args -> combination(args[0], args[1]));
-        put("mod", args -> mod(args[0], args[1]));
-        put("div", args -> div(args[0], args[1]));
-    }};
 
     /** Optional parent context. When present, functions are inherited from the parent. */
     public Context parent;
@@ -94,7 +79,6 @@ public class Context {
             this.functions.put(functionDefinition.getName(), functionDefinition);
         }
         // Inherit native functions.
-        this.nativeFunctions.putAll(parent.nativeFunctions);
     }
 
     /**
@@ -155,14 +139,8 @@ public class Context {
         return functions.containsKey(name);
     }
 
-    /**
-     * Check whether a native (built-in) function exists in this context.
-     *
-     * @param name function name
-     * @return {@code true} if a native implementation exists
-     */
     public boolean containsNativeFunction(String name) {
-        return nativeFunctions.containsKey(name);
+        return NativeFunction.contains(name);
     }
 
     /**
@@ -172,44 +150,75 @@ public class Context {
      * @param args numeric arguments
      * @return the function result as {@code Double}
      */
-    public BigDecimal callNativeFunction(String name, BigDecimal[] args) {
-        Function<BigDecimal[], BigDecimal> f = nativeFunctions.get(name);
-        return f.apply(args);
+    public static Term callNativeFunction(String name, Term[] args) {
+        if (args[0].getValue() != null) {
+            return switch (name) {
+                case "cos" ->
+                        new Term(Math.cos((args[0].getValue().doubleValue() * ((JParser.degrees) ? 0.0174533 : 1))));
+                case "sin" ->
+                        new Term(Math.sin((args[0].getValue().doubleValue() * ((JParser.degrees) ? 0.0174533 : 1))));
+                case "tan" ->
+                        new Term(Math.tan(args[0].getValue().doubleValue() * ((JParser.degrees) ? 0.0174533 : 1)));
+                case "tanh" ->
+                        new Term(Math.tanh(args[0].getValue().doubleValue() * ((JParser.degrees) ? 0.0174533 : 1)));
+                case "sinh" ->
+                        new Term(Math.sinh(args[0].getValue().doubleValue() * ((JParser.degrees) ? 0.0174533 : 1)));
+                case "cosh" ->
+                        new Term(Math.cosh(args[0].getValue().doubleValue() * ((JParser.degrees) ? 0.0174533 : 1)));
+                case "asin" ->
+                        new Term(Math.asin(args[0].getValue().doubleValue() * ((JParser.degrees) ? 0.0174533 : 1)));
+                case "acos" ->
+                        new Term(Math.acos(args[0].getValue().doubleValue() * ((JParser.degrees) ? 0.0174533 : 1)));
+                case "atan" ->
+                        new Term(Math.atan(args[0].getValue().doubleValue() * ((JParser.degrees) ? 0.0174533 : 1)));
+                case "cbrt" ->
+                        new Term(Math.cbrt(args[0].getValue().doubleValue() * ((JParser.degrees) ? 0.0174533 : 1)));
+                case "sqrt" ->
+                        new Term(Math.sqrt(args[0].getValue().doubleValue() * ((JParser.degrees) ? 0.0174533 : 1)));
+                case "abs" ->
+                        new Term(Math.abs(args[0].getValue().doubleValue() * ((JParser.degrees) ? 0.0174533 : 1)));
+                case "ln" -> new Term(Math.log(args[0].getValue().doubleValue() * ((JParser.degrees) ? 0.0174533 : 1)));
+                case "log" ->
+                        new Term(Math.log10(args[0].getValue().doubleValue() * ((JParser.degrees) ? 0.0174533 : 1)));
+                case "fac" ->
+                        factorial(args[0]);
+                case "perm" ->
+                        new Term(permutation(args[0].getValue(), args[1].getValue()));
+                case "comb" ->
+                        new Term(combination(args[0].getValue(), args[1].getValue()));
+                case "mod" ->
+                        new Term(mod(args[0].getValue(), args[1].getValue()));
+                case "div" ->
+                        new Term(div(args[0].getValue(), args[1].getValue()));
+                case "sum" ->
+                        new Term(summation(args[0].toString()).getValue());
+                default -> null;
+            };
+        } else {
+            return new Term(name + "(" + args[0] + ")");
+        }
     }
 
-    /**
-     * Placeholder for numerical integration native function.
-     *
-     * <p>
-     * Expected to compute the definite integral over the provided bounds. Current implementation
-     * returns 0.0 and should be replaced with a proper numerical integration routine when needed.
-     * </p>
-     *
-     * @param upper upper bound
-     * @param lower lower bound
-     * @return integral result (currently 0.0)
-     */
-    public static double integral(double upper, double lower) {
-        return 0.0;
-    }
-
-    private static BigDecimal factorial(BigDecimal number) {
+    private static Term factorial(Term number) {
+        if (number.getValue() == null) {
+            return new Term("fac(" + number + ")");
+        }
         BigDecimal decimal = new BigDecimal(1);
-        for (double i = number.doubleValue(); i > 0; i--) {
+        for (double i = number.getValue().doubleValue(); i > 0; i--) {
             decimal = decimal.multiply(BigDecimal.valueOf(i));
         }
-        return decimal;
+        return new Term(decimal);
     }
 
     private static BigDecimal permutation(BigDecimal n, BigDecimal k) {
-        BigDecimal n_fac = factorial(n);
-        BigDecimal k_fac = factorial(n.subtract(k));
+        BigDecimal n_fac = factorial(new Term(n)).getValue();
+        BigDecimal k_fac = factorial(new Term(n.subtract(k))).getValue();
         return n_fac.divide(k_fac);
     }
 
     private static BigDecimal combination(BigDecimal n, BigDecimal k) {
         BigDecimal permutation = permutation(n, k);
-        return permutation.divide(factorial(k));
+        return permutation.divide(factorial(new Term(k)).getValue());
     }
 
     private static BigDecimal mod(BigDecimal a, BigDecimal b) {
@@ -220,15 +229,33 @@ public class Context {
         return a.divide(b).subtract(mod(a, b));
     }
 
-    public static MathObject euclidianGcf(MathObject a, MathObject b) {
+    public static Term euclidianGcf(Term a, Term b) {
         if (JParser.isZero(b)) {
             throw new RuntimeException("Unable to find gcf when b = 0");
         }
-        MathObject quotient = new MathObject(0);
-        MathObject remainder = new MathObject(a.toString());
-
-
+        Term quotient = new Term(0);
+        Term remainder = new Term(a.toString());
 
         return a;
+    }
+
+    public static Term summation(String expression) {
+        Term object = JParser.evaluate(expression);
+        FunctionDefinition function = JParser.createFunctionFromPolynomial(object.toString(), object.findVariable());
+        BigDecimal sum = new BigDecimal(0);
+        BigDecimal prevValue;
+        BigDecimal newValue = null;
+        Term functionValue;
+
+        for (int i = 0; true; i++) {
+            prevValue = newValue;
+            functionValue = JParser.evaluate(function.getName() + "(" + i + ")");
+            newValue = sum.add(functionValue.getValue());
+            sum = newValue;
+            if (prevValue != null && JParser.isZero(prevValue.subtract(newValue))) {
+                break;
+            }
+        }
+        return new Term(sum);
     }
 }

@@ -2,7 +2,7 @@ package tokenizer;
 
 public class ParenthesisToken extends Token{
 
-    ParenthesisToken(String lexeme) {
+    public ParenthesisToken(String lexeme) {
         super((lexeme.equals(")") ? TokenType.RPAREN : TokenType.LPAREN), lexeme);
     }
 

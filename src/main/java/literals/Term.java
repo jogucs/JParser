@@ -1,17 +1,12 @@
 package literals;
 
 import evaluator.JParser;
-import nodes.ExpressionNode;
 import nodes.UnaryNode;
-import nodes.VariableNode;
 import tokenizer.Operator;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
 /**
  * Represents either a named variable or a numeric constant used in mathematical
@@ -22,7 +17,7 @@ import java.util.List;
  * returns 0.0. The {@link #toString()} method prefers the variable name if set,
  * otherwise returns the numeric value as a string, and falls back to "0.0".</p>
  */
-public class MathObject {
+public class Term {
     /**
      * The variable name represented by this object, e.g. "x".
      * When non-null this object represents a variable rather than a concrete value.
@@ -35,26 +30,26 @@ public class MathObject {
      */
     private BigDecimal value;
 
-    private MathObject coefficient;
-    private MathObject exponent;
+    private Term coefficient;
+    private Term exponent;
 
     /**
      * Constructs a MathObject that represents a variable with the given name.
      *
      * @param name the variable name (may be null, but then object is effectively empty)
      */
-    public MathObject(String name) {
+    public Term(String name) {
         this.name = name;
         if (JParser.isNumeric(name) && !name.isEmpty()) {
             this.setValue(BigDecimal.valueOf(Double.parseDouble(name)));
         }
     }
 
-    public MathObject(Double value) {
+    public Term(Double value) {
         this.value = BigDecimal.valueOf(value);
     }
 
-    public MathObject(int value) {
+    public Term(int value) {
         this.value = BigDecimal.valueOf(value);
     }
 
@@ -63,14 +58,13 @@ public class MathObject {
      *
      * @param value the numeric value to store
      */
-    public MathObject(BigDecimal value) {
+    public Term(BigDecimal value) {
         this.value = value;
-        JParser.normalize(this);
     }
 
     public String findVariable() {
         for (String s : this.name.split("")) {
-            if (!JParser.isNumeric(s) && !Operator.getAsStringList().contains(s) && !s.equals("(") && !s.equals(")")) {
+            if (!JParser.isNumeric(s) && !Operator.getAsStringList().contains(s) && !s.equals("(") && !s.equals(")") && !s.equals(".")) {
                 return s;
             }
         }
@@ -90,19 +84,19 @@ public class MathObject {
         return this.name != null;
     }
 
-    public MathObject getCoefficient() {
+    public Term getCoefficient() {
         return coefficient;
     }
 
-    public void setCoefficient(MathObject coefficient) {
+    public void setCoefficient(Term coefficient) {
         this.coefficient = coefficient;
     }
 
-    public MathObject getExponent() {
+    public Term getExponent() {
         return exponent;
     }
 
-    public void setExponent(MathObject exponent) {
+    public void setExponent(Term exponent) {
         this.exponent = exponent;
     }
 
@@ -150,7 +144,7 @@ public class MathObject {
         this.value = value;
     }
 
-    public void setValue(MathObject object) {
+    public void setValue(Term object) {
         this.name = object.getName();
     }
 
@@ -158,32 +152,33 @@ public class MathObject {
         this.name = name;
     }
 
-    public MathObject combine(MathObject object) {
+    public Term combine(Term object) {
         this.setName(this + object.toString());
         return this;
     }
 
-    public MathObject combine(MathObject object, String string) {
+    public Term combine(Term object, String string) {
         this.setName(this.toString() + string + object.toString());
         return this;
     }
 
-    public static MathObject combine(MathObject object1, MathObject object2) {
-        return new MathObject(object1+ "" + object2);
+    public static Term combine(Term object1, Term object2) {
+        return new Term(object1+ "" + object2);
     }
 
-    public static MathObject combine(MathObject object1, MathObject object2, String string) {
-        return new MathObject(object1 + "" + string + "" + object2);
+    public static Term combine(Term object1, Term object2, String string) {
+        return new Term(object1 + "" + string + "" + object2);
     }
 
-    public MathObject operation(MathObject object, String operator) {
+    public Term operation(Term object, String operator) {
         Operator op = Operator.getAsString(operator);
         if (this.getValue() != null && object.getValue() != null) {
             return switch (op) {
-                case MULT -> new MathObject(this.getValue().multiply(object.getValue()));
-                case DIV -> new MathObject(this.getValue().divide(object.getValue(), new MathContext(JParser.getCurrentPrecision(), RoundingMode.HALF_UP)));
-                case PLUS -> new MathObject(this.getValue().add(object.getValue()));
-                case MINUS -> new MathObject(this.getValue().subtract(object.getValue()));
+                case MULT -> new Term(this.getValue().multiply(object.getValue()));
+                case DIV -> new Term(this.getValue().divide(object.getValue(), new MathContext(JParser.getCurrentPrecision(), RoundingMode.HALF_UP)));
+                case PLUS -> new Term(this.getValue().add(object.getValue()));
+                case MINUS -> new Term(this.getValue().subtract(object.getValue()));
+                case EXP -> new Term(this.getValue().pow(object.getValue().intValue()));
                 case null, default -> null;
             };
         } else {
@@ -191,8 +186,8 @@ public class MathObject {
         }
     }
 
-    public MathObject operation(String operator) {
-        MathObject object = operation(this, operator);
+    public Term operation(String operator) {
+        Term object = operation(this, operator);
         return object;
     }
 
@@ -218,26 +213,27 @@ public class MathObject {
     }
 
     private boolean isSurroundedBySinglePair(String s) {
-        if (s.length() < 2) {
-            return false;
-        }
-        if (s.charAt(0) != '(') {
-            return false;
-        }
+        if (s.length() < 2) return false;
+
+
+        if (s.charAt(0) != '(') return false;
+
         int depth = 0;
+        char c;
         for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c == '(') depth++;
-            else if (c == ')') {
+            c = s.charAt(i);
+            if (c == '(') {
+                depth++;
+            }
+            else if (s.charAt((s.length() - 1) - i) == ')') {
                 depth--;
-                if (depth == 0 && i < s.length() - 1) return false;
             }
         }
 
         return depth == 0;
     }
 
-    public MathObject removeTrailingParenthesis() {
+    public Term removeTrailingParenthesis() {
         if (this.name == null || this.name.length() < 2 || !this.name.contains("(")) return this;
         String s = this.name;
         while (s.length() >= 2 && s.charAt(0) == '(' && s.charAt(s.length() - 1) == ')' && isSurroundedBySinglePair(s)) {

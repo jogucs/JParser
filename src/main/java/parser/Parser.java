@@ -1,11 +1,10 @@
 package parser;
 
+import evaluator.Context;
 import evaluator.JParser;
-import literals.MathObject;
 import nodes.*;
 import tokenizer.*;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -39,7 +38,7 @@ public class Parser {
     private final List<Token> tokens;
 
     private boolean inVector = false;
-    private boolean inFunction = false;
+    private boolean nativeFunction = false;
 
     /**
      * Current position (index) within {@link #tokens}.
@@ -63,7 +62,6 @@ public class Parser {
     public ExpressionNode parseExpression() {
         ExpressionNode body = parseSign();
         JParser.parseThroughTree(body);
-        JParser.combineSymbols(body);
         return body;
     }
 
@@ -156,11 +154,10 @@ public class Parser {
             consume();
         }
         Token tok = current();
+        TokenType nextType = Objects.requireNonNull(peek()).getType();
         switch (current().getType()) {
             case NUMBER -> {
-                if (Objects.requireNonNull(peek()).getType().equals(TokenType.IDENTIFIER)) {
-                    tokens.add(position + 1, new OperatorToken("*", Operator.MULT));
-                } else if (Objects.requireNonNull(peek()).getType().equals(TokenType.LPAREN)) {
+                if (nextType.equals(TokenType.IDENTIFIER) || nextType.equals(TokenType.LPAREN)) {
                     tokens.add(position + 1, new OperatorToken("*", Operator.MULT));
                 }
                 consume();
@@ -286,8 +283,8 @@ public class Parser {
         if (!(current().getType().equals(TokenType.OPERATOR) && current().getValue().equals(Operator.EQUAL))) {
             throw new RuntimeException("Expected '=' after function parameters");
         }
+        nativeFunction = false;
         consume();
-
         ExpressionNode body = parseExpression();
         return new FunctionDefinitionNode(name, params, body);
     }
@@ -317,7 +314,7 @@ public class Parser {
      * @return parsed function node
      */
     private ExpressionNode parseFunctionBasedExpression(String name) {
-        if (isFunctionDefinition()) {
+        if (isFunctionDefinition(name)) {
             return parseFunctionDefinition(name);
         } else {
             return parseFunctionCall(name);
@@ -331,11 +328,14 @@ public class Parser {
      *
      * @return true if a function definition pattern is detected
      */
-    private boolean isFunctionDefinition() {
+    private boolean isFunctionDefinition(String name) {
         int closing = findClosingParenIndex(position);
         if (closing >= 0 && closing + 1 < tokens.size()) {
             Token next = tokens.get(closing + 1);
-            return next.getType().equals(TokenType.OPERATOR) && next.getValue().equals(Operator.EQUAL);
+            if (JParser.CONTEXT.containsNativeFunction(name)) {
+                return false;
+            }
+            return ((next.getType().equals(TokenType.OPERATOR) && next.getValue().equals(Operator.EQUAL)));
         }
         return false;
     }

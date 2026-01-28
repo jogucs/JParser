@@ -2,7 +2,8 @@ package evaluator;
 
 import literals.FunctionDefinition;
 import literals.Matrix;
-import literals.MathObject;
+import literals.NativeFunction;
+import literals.Term;
 import nodes.*;
 import parser.Parser;
 import tokenizer.Operator;
@@ -53,7 +54,7 @@ public abstract class JParser {
     /**
      * Whether angle inputs/outputs should be interpreted in degrees.
      */
-    private static boolean degrees;
+    public static boolean degrees = false;
 
     // ---------------------------------------------------------------------
     // Calculation and public API (grouped)
@@ -62,20 +63,19 @@ public abstract class JParser {
     /**
      * Parse and evaluate the given expression string using the shared {@link Context}.
      *
-     * <p>If the expression is empty or only whitespace, returns a {@link MathObject} wrapping 0.</p>
+     * <p>If the expression is empty or only whitespace, returns a {@link Term} wrapping 0.</p>
      *
      * @param expression the expression string to evaluate
-     * @return evaluated {@link MathObject}
+     * @return evaluated {@link Term}
      */
-    public static MathObject evaluate(String expression) {
+    public static Term evaluate(String expression) {
         if (expression.trim().isEmpty()) {
-            return new MathObject(new BigDecimal(0));
+            return new Term(new BigDecimal(0));
         }
         ExpressionNode parsed = parse(expression);
-        ExpressionNode factored = Simplifier.factor(parsed);
-        MathObject object = EVALUATOR.evaluate(factored, CONTEXT);
+        Term object = EVALUATOR.evaluate(parsed, CONTEXT);
         if (isZero(object)) {
-            return new MathObject(0);
+            return new Term(0);
         }
         if (object.getValue() != null) {
             object.setName(normalize(object.getValue()));
@@ -100,22 +100,27 @@ public abstract class JParser {
     }
 
     /**
-     * Parse a {@link MathObject} by converting to string then parsing.
+     * Parse a {@link Term} by converting to string then parsing.
      *
      * @param object object to parse
      * @return parsed {@link ExpressionNode}
      */
-    public static ExpressionNode parse(MathObject object) {
+    public static ExpressionNode parse(Term object) {
         return parse(object.toString());
+    }
+
+    public static Term factor(String expression) {
+        ExpressionNode node = Simplifier.factor(parse(expression));
+        return evaluate(node);
     }
 
     /**
      * Evaluate an already-parsed {@link ExpressionNode} using the shared context.
      *
      * @param node expression node to evaluate
-     * @return evaluated {@link MathObject}
+     * @return evaluated {@link Term}
      */
-    public static MathObject evaluate(ExpressionNode node) {
+    public static Term evaluate(ExpressionNode node, boolean... remove) {
         return EVALUATOR.evaluate(node, CONTEXT);
     }
 
@@ -124,9 +129,9 @@ public abstract class JParser {
      *
      * @param expression expression to differentiate
      * @param withRespectTo variable name
-     * @return derivative as a {@link MathObject}
+     * @return derivative as a {@link Term}
      */
-    public static MathObject differentiate(String expression, String withRespectTo) {
+    public static Term differentiate(String expression, String withRespectTo) {
         ExpressionNode body = parse(expression);
         return findDerivative(body, withRespectTo);
     }
@@ -136,10 +141,10 @@ public abstract class JParser {
      *
      * @param root expression root to integrate
      * @param wrt variable name
-     * @return integral as a {@link MathObject}
+     * @return integral as a {@link Term}
      */
-    public static MathObject integrate(ExpressionNode root, String wrt) {
-        MathObject integrated = new MathObject("");
+    public static Term integrate(ExpressionNode root, String wrt) {
+        Term integrated = new Term("");
         if (root instanceof BinaryNode binaryNode) {
             ExpressionNode left = binaryNode.getLeftChild();
             ExpressionNode right = binaryNode.getRightChild();
@@ -191,83 +196,93 @@ public abstract class JParser {
      *
      * @param expression polynomial expression
      * @param variables variable names
-     * @return list of roots as {@link MathObject}
+     * @return list of roots as {@link Term}
      */
-    public static List<BigDecimal> findRoots(String expression, String... variables) {
-        ExpressionNode body = JParser.parse(expression);
-        FunctionDefinition definition = createFunctionFromPolynomial(expression, variables);
-        String id = definition.getName();
-        String expr = definition.getExpression();
-        MathObject derivative = findDerivative(body, variables[0]);
-        FunctionDefinition derivativeFunction = createFunctionFromPolynomial(derivative.toString(), variables);
-        List<BigDecimal> objects = new ArrayList<>();
-        int rootsFound = 0;
-        int degree = findPolynomialDegree(body);
-        BigDecimal firstGuess = new BigDecimal(1);
-        BigDecimal secondGuess = new BigDecimal(-1);
-        MathObject firstValue = evaluate(id + "(" + firstGuess + ")");
-        MathObject secondValue = evaluate(id + "(" + secondGuess + ")");
-        BigDecimal[] brackets;
-        boolean signChange = firstValue.getSign() != secondValue.getSign();
-        while (!signChange && firstGuess.doubleValue() < Integer.MAX_VALUE && secondGuess.doubleValue() < Integer.MAX_VALUE) {
-            firstGuess =  firstGuess.multiply(BigDecimal.valueOf(2));
-            secondGuess = secondGuess.multiply(BigDecimal.valueOf(2));
-            firstValue = evaluate(id + "(" + firstGuess + ")");
-            secondValue = evaluate(id + "(" + secondGuess + ")");
-            if (firstValue.getSign() != secondValue.getSign()) {
-                signChange = true;
+    public static List<Float> findRoots(String expression, String... variables) {
+        List<Float> roots = new ArrayList<>();
+        ExpressionNode parsed = parse(expression);
+
+        Term derivative = findDerivative(parsed, variables[0]);
+        Term evaluated = evaluate(expression);
+
+        String functionId = createFunctionFromPolynomial(evaluated.toString(), variables).getName();
+        String derivativeFunctionId = createFunctionFromPolynomial(derivative.toString(), variables).getName();
+
+        float x = 1;
+
+        Term guessFunctionValue;
+        Term guessDerivativeValue;
+
+        Term funcDiv;
+        int guesss = 0;
+
+        boolean checkingPlusX = true;
+        boolean checkingNegX = true;
+
+        while (checkingPlusX) {
+            guessFunctionValue = evaluate(functionId + "(" + x + ")");
+            guessDerivativeValue = evaluate(derivativeFunctionId + "(" + x + ")");
+            funcDiv = evaluate(guessFunctionValue + "/" + guessDerivativeValue);
+            x = evaluate(x + "-" + funcDiv).getValue().floatValue();
+            if (guessFunctionValue.getValue().abs().compareTo(BigDecimal.valueOf(0.000001)) < 0 || guesss > 100) {
+                roots.add(Float.valueOf(normalize(BigDecimal.valueOf(x))));
+                checkingPlusX = false;
             }
+            guesss++;
         }
-        brackets = new BigDecimal[]{firstGuess, secondGuess};
-        BigDecimal root;
-        while (rootsFound < degree) {
-            objects.add(findRootsHelper(definition, derivativeFunction, brackets));
-            rootsFound++;
+        guesss = 0;
+        while (checkingNegX) {
+            guessFunctionValue = evaluate(functionId + "(" + x + ")");
+            guessDerivativeValue = evaluate(derivativeFunctionId + "(" + x + ")");
+            funcDiv = evaluate(guessFunctionValue + "/" + guessDerivativeValue);
+            x = evaluate(x + "-" + funcDiv).getValue().floatValue() * -1;
+            if (guessFunctionValue.getValue().abs().compareTo(BigDecimal.valueOf(0.000001)) < 0 || guesss > 100) {
+                roots.add(Float.valueOf(normalize(BigDecimal.valueOf(x))));
+                checkingNegX = false;
+            }
+            guesss++;
         }
-        return objects;
+
+        return roots;
     }
 
-    private static BigDecimal findRootsHelper(FunctionDefinition expression, FunctionDefinition derivative, BigDecimal[] range) {
-        if (range.length != 2) {
-            throw new RuntimeException("Range should be in 2d coordinates");
-        }
 
-        return null;
-    }
 
     /**
-     * Walk the expression tree and produce a textual {@link MathObject} representation.
+     * Walk the expression tree and produce a textual {@link Term} representation.
      *
      * @param root expression root
-     * @return textual {@link MathObject}
+     * @return textual {@link Term}
      */
-    public static MathObject parseThroughTree(ExpressionNode root) {
+    public static Term parseThroughTree(ExpressionNode root) {
         if (root instanceof BinaryNode binaryNode) {
             binaryNode.getLeftChild().setParent(binaryNode);
             binaryNode.getRightChild().setParent(binaryNode);
-            MathObject object = new MathObject(parseThroughTree(binaryNode.getLeftChild()) + Operator.getFromOperator(binaryNode.getOperator()) + parseThroughTree(binaryNode.getRightChild()));
+            Term object = new Term(parseThroughTree(binaryNode.getLeftChild()) + Operator.getFromOperator(binaryNode.getOperator()) + parseThroughTree(binaryNode.getRightChild()));
             object.forceParenthesis();
             return object;
         } else if (root instanceof LiteralNode literalNode) {
-            return new MathObject(literalNode.getValue().toString());
+            return new Term(literalNode.getValue().toString());
         } else if (root instanceof UnaryNode unaryNode) {
             unaryNode.getChild().setParent(unaryNode);
-            MathObject object = parseThroughTree(unaryNode.getChild());
+            Term object = parseThroughTree(unaryNode.getChild());
             if (unaryNode.getSymbol().equals(UnaryNode.UnarySymbol.NEGATIVE)) {
-                object = new MathObject("-" + object);
+                object = new Term("-" + object);
                 object.forceParenthesis();
             }
             return object;
         } else if (root instanceof VariableNode variableNode) {
-            MathObject object = new MathObject(variableNode.getName());
+            Term object = new Term(variableNode.getName());
             return object;
         } else if (root instanceof FunctionCallNode functionCallNode) {
-            return parseThroughTree(CONTEXT.lookupFunction(functionCallNode.getName()).getBody());
+            if (!CONTEXT.containsNativeFunction(functionCallNode.getName())) {
+                return parseThroughTree(CONTEXT.lookupFunction(functionCallNode.getName()).getBody());
+            }
+            return new Term(root.getValue().toString());
         } else if (root instanceof FunctionDefinitionNode functionDefinitionNode) {
             return parseThroughTree(functionDefinitionNode.getBody());
-        }
-        else {
-            return new MathObject("");
+        } else {
+            return new Term(root.getValue().toString());
 
         }
     }
@@ -310,10 +325,14 @@ public abstract class JParser {
      * Compute the determinant of {@code matrix}.
      *
      * @param matrix matrix
-     * @return determinant as a {@link MathObject}
+     * @return determinant as a {@link Term}
      */
-    public static MathObject matrixDeterminant(Matrix matrix) {
+    public static Term matrixDeterminant(Matrix matrix) {
         return MatrixMath.findDeterminant(matrix);
+    }
+
+    public static Term characteristicPolynomial(Matrix matrix) {
+        return MatrixMath.findCharacteristicPolynomial(matrix);
     }
 
     // ---------------------------------------------------------------------
@@ -342,28 +361,27 @@ public abstract class JParser {
     /**
      * Toggle usage of degrees for angle-based functions.
      *
-     * @param degrees true for degrees, false for radians
      */
-    public static void changeDegrees(boolean degrees) {
-        JParser.degrees = degrees;
+    public static void changeDegrees() {
+        JParser.degrees = !JParser.degrees;
     }
 
     /**
-     * Determine whether a {@link MathObject} should be considered zero (with epsilon).
+     * Determine whether a {@link Term} should be considered zero (with epsilon).
      *
      * @param val numeric value to test
      * @return true if value is approximately zero
      */
-    public static boolean isZero(MathObject val) {
+    public static boolean isZero(Term val) {
         if (val.getValue() != null) {
-            return Math.abs(val.getValue().doubleValue()) <= 0.0000001;
+            return Math.abs(val.getValue().doubleValue()) <= 1e-99;
         } else {
             return val.getName() != null && val.getName().isEmpty();
         }
     }
 
     public static boolean isZero(BigDecimal decimal) {
-        return isZero(new MathObject(decimal));
+        return isZero(new Term(decimal));
     }
 
     /**
@@ -377,11 +395,11 @@ public abstract class JParser {
     }
 
     /**
-     * Normalize a {@link MathObject} by parsing and setting its numeric {@code value} and {@code name}.
+     * Normalize a {@link Term} by parsing and setting its numeric {@code value} and {@code name}.
      *
      * @param object object to normalize
      */
-    public static void normalize(MathObject object) {
+    public static void normalize(Term object) {
         if (object.getValue() != null || (object.getName() != null && isNumeric(object.getName()))) {
             object.setValue(BigDecimal.valueOf(Double.parseDouble(object.toString())));
             object.setName(normalize(object.getValue()));
@@ -411,10 +429,10 @@ public abstract class JParser {
      * @param right right child
      * @param operator operator between them
      * @param wrt variable to integrate with respect to
-     * @return integrated {@link MathObject}
+     * @return integrated {@link Term}
      */
-    private static MathObject integrateExpression(ExpressionNode left, ExpressionNode right, Operator operator, String wrt) {
-        MathObject integrated = new MathObject("");
+    private static Term integrateExpression(ExpressionNode left, ExpressionNode right, Operator operator, String wrt) {
+        Term integrated = new Term("");
         if (left instanceof BinaryNode) {
             integrated.operation(integrate(left, wrt), "+");
         }
@@ -432,9 +450,9 @@ public abstract class JParser {
     /**
      * Integrate an exponent expression (x^n -> x^(n+1)/(n+1)).
      */
-    private static MathObject integrateExp(ExpressionNode left, ExpressionNode right, String wrt) {
-        MathObject variable = evaluate(left);
-        MathObject exponent = evaluate(right);
+    private static Term integrateExp(ExpressionNode left, ExpressionNode right, String wrt) {
+        Term variable = evaluate(left);
+        Term exponent = evaluate(right);
 
         if (exponent.getValue() != null) {
             exponent.setValue(exponent.getValue().add(new BigDecimal(1)));
@@ -444,7 +462,7 @@ public abstract class JParser {
         }
         exponent.setName(exponent.toString());
 
-        MathObject integrated = new MathObject("");
+        Term integrated = new Term("");
         integrated.combine(variable);
         integrated.operation(exponent, "^");
         integrated.addParenthesis();
@@ -456,11 +474,11 @@ public abstract class JParser {
     /**
      * Integrate multiplication by combining integrals (simple product rule placeholder).
      */
-    private static MathObject integrateMult(MathObject accumulated, ExpressionNode left, ExpressionNode right, String wrt) {
-        MathObject leftObject = integrate(left, wrt);
-        MathObject rightObject = integrate(right, wrt);
+    private static Term integrateMult(Term accumulated, ExpressionNode left, ExpressionNode right, String wrt) {
+        Term leftObject = integrate(left, wrt);
+        Term rightObject = integrate(right, wrt);
 
-        accumulated = MathObject.combine(leftObject, rightObject, "*");
+        accumulated = Term.combine(leftObject, rightObject, "*");
         accumulated.addParenthesis();
         return accumulated;
     }
@@ -471,10 +489,10 @@ public abstract class JParser {
      *
      * @param root expression root
      * @param wrt variable
-     * @return derivative as {@link MathObject}
+     * @return derivative as {@link Term}
      */
-    private static MathObject findDerivative(ExpressionNode root, String wrt) {
-        MathObject derivative = new MathObject("");
+    private static Term findDerivative(ExpressionNode root, String wrt) {
+        Term derivative = new Term("");
 
         if (root instanceof BinaryNode binaryNode) {
             ExpressionNode left = binaryNode.getLeftChild();
@@ -484,41 +502,59 @@ public abstract class JParser {
             if (literalNode.getParent() != null) {
                 if (literalNode.getParent() instanceof BinaryNode bin) {
                     if (bin.getOperator().equals(Operator.PLUS) || bin.getOperator().equals(Operator.MINUS)) {
-                        return new MathObject(0);
+                        return new Term(0);
                     } else if (bin.getOperator().equals(Operator.MULT)){
-                        return new MathObject(((BigDecimal) literalNode.getValue()));
+                        return new Term(((BigDecimal) literalNode.getValue()));
                     }
                 }
             }
-            return new MathObject(0);
+            return new Term(0);
         } else if (root instanceof VariableNode variableNode) {
             if (!variableNode.getName().equals(wrt)) {
-                return new MathObject(0);
+                return new Term(0);
             } else if (variableNode.getParent() != null) {
                 if (variableNode.getParent() instanceof BinaryNode binaryNode) {
                     if (binaryNode.getOperator().equals(Operator.PLUS) || binaryNode.getOperator().equals(Operator.MINUS)) {
-                        return new MathObject("1");
+                        return new Term("1");
                     }
                 } else if (variableNode.getParent() instanceof UnaryNode unaryNode) {
                     if (unaryNode.getSymbol().equals(UnaryNode.UnarySymbol.NEGATIVE)) {
-                        return new MathObject("1");
+                        return new Term("1");
                     }
-                    return new MathObject("1");
+                    return new Term("1");
                 }
             } else if (variableNode.getName().equals(wrt)) {
-                return new MathObject("1");
+                return new Term("1");
             }
-            return new MathObject(variableNode.getName());
+            return new Term(variableNode.getName());
         } else if (root instanceof UnaryNode unaryNode) {
             if (unaryNode.getSymbol().equals(UnaryNode.UnarySymbol.NEGATIVE)) {
-                return new MathObject("-" + findDerivative(unaryNode.getChild(), wrt));
+                return new Term("-" + findDerivative(unaryNode.getChild(), wrt));
             } else {
                 return findDerivative(unaryNode.getChild(), wrt);
             }
         } else if (root instanceof FunctionCallNode functionCallNode) {
-            FunctionDefinition def = CONTEXT.lookupFunction(functionCallNode.getName());
-            MathObject object = evaluate(def.getBody());
-            return findDerivative(JParser.parse(object), wrt);
+            String name = functionCallNode.getName();
+            Term outsideDerivative;
+            Term insideDerivative;
+            if (CONTEXT.containsNativeFunction(name)) {
+                if (NativeFunction.isTrigonometric(name)) {
+                    insideDerivative = findDerivative(functionCallNode.getArgs().getFirst(), wrt);
+                    outsideDerivative = new Term(Context.trigonometricDerivatives.get(name)[0]);
+                    for (String s : Context.trigonometricDerivatives.get(name)) {
+                        if (s.equalsIgnoreCase(outsideDerivative.getName())) continue;
+                        outsideDerivative.operation(new Term(s), "*");
+                    }
+                    outsideDerivative.addParenthesis();
+                    insideDerivative.addParenthesis();
+                    derivative = insideDerivative.combine(outsideDerivative.combine(new Term("(" + JParser.evaluate(functionCallNode.getArgs().getFirst()) + ")")), "*");
+                    return derivative;
+                }
+            } else {
+                FunctionDefinition def = CONTEXT.lookupFunction(name);
+                outsideDerivative = evaluate(def.getBody());
+                return findDerivative(parse(outsideDerivative), wrt);
+            }
         }
         return derivative;
     }
@@ -526,8 +562,8 @@ public abstract class JParser {
     /**
      * Differentiate a binary expression by operator.
      */
-    private static MathObject differentiateExpression(ExpressionNode left, ExpressionNode right, Operator operator, String wrt) {
-        MathObject differentiated = new MathObject("");
+    private static Term differentiateExpression(ExpressionNode left, ExpressionNode right, Operator operator, String wrt) {
+        Term differentiated = new Term("");
         if (left instanceof BinaryNode) {
             differentiated.combine(findDerivative(left, wrt));
         }
@@ -547,18 +583,18 @@ public abstract class JParser {
     /**
      * Differentiate exponent expressions (power rule simple form).
      */
-    private static MathObject differentiateExp(ExpressionNode left, ExpressionNode right, String wrt) {
-        MathObject variable = evaluate(left);
-        MathObject exp = evaluate(right);
-        MathObject expReduced;
+    private static Term differentiateExp(ExpressionNode left, ExpressionNode right, String wrt) {
+        Term variable = evaluate(left);
+        Term exp = evaluate(right);
+        Term expReduced;
 
         if (!variable.toString().contains(wrt)) {
-            return new MathObject(0);
+            return new Term(0);
         }
         if (exp.getValue() != null) {
-            expReduced = new MathObject(exp.getValue().subtract(BigDecimal.ONE));
+            expReduced = new Term(exp.getValue().subtract(BigDecimal.ONE));
         } else {
-            expReduced = MathObject.combine(exp, new MathObject(BigDecimal.ONE), "-");
+            expReduced = Term.combine(exp, new Term(BigDecimal.ONE), "-");
         }
         expReduced = evaluate(expReduced.toString());
         if (expReduced.toString().length() > 1) {
@@ -568,19 +604,21 @@ public abstract class JParser {
             variable.combine(expReduced, "^");
         }
         exp = evaluate(exp.toString());
-        MathObject differentiated = new MathObject("");
+        Term differentiated = new Term("");
         differentiated.combine(exp);
+        differentiated.combine(variable);
         differentiated.forceParenthesis();
-        differentiated.combine(variable, "*");
         return differentiated;
     }
 
     /**
      * Differentiate multiplication (product rule placeholder/combiner).
      */
-    private static MathObject differentiateMult(MathObject accumulated, ExpressionNode left, ExpressionNode right, String wrt) {
-        MathObject leftObject = findDerivative(left, wrt);
-        MathObject rightObject = findDerivative(right, wrt);
+    private static Term differentiateMult(Term accumulated, ExpressionNode left, ExpressionNode right, String wrt) {
+        Term leftObject = findDerivative(left, wrt);
+        Term rightObject = findDerivative(right, wrt);
+        System.out.println(leftObject);
+        System.out.println(rightObject);
         normalize(leftObject);
         normalize(rightObject);
         if (leftObject.toString().equals(wrt) || rightObject.toString().equals(wrt)) {
@@ -591,7 +629,7 @@ public abstract class JParser {
                 return leftObject.combine(accumulated);
             }
         } else if (!leftObject.toString().contains(wrt) && !rightObject.toString().contains(wrt)){
-            MathObject zero = new MathObject("0");
+            Term zero = new Term("0");
             return zero.combine(accumulated);
         }
         if (accumulated.toString().isEmpty()) {
@@ -605,17 +643,17 @@ public abstract class JParser {
     /**
      * Differentiate addition/subtraction.
      */
-    private static MathObject differentiateAddSub(ExpressionNode left, ExpressionNode right, Operator operator, String wrt) {
-        MathObject leftObject = findDerivative(left, wrt);
-        MathObject rightObject = findDerivative(right, wrt);
+    private static Term differentiateAddSub(ExpressionNode left, ExpressionNode right, Operator operator, String wrt) {
+        Term leftObject = findDerivative(left, wrt);
+        Term rightObject = findDerivative(right, wrt);
 
         if (rightObject.toString().isEmpty()) {
-            rightObject = new MathObject(0);
+            rightObject = new Term(0);
         } else if (leftObject.toString().isEmpty()) {
-            leftObject = new MathObject(0);
+            leftObject = new Term(0);
         }
 
-        MathObject combined = new MathObject("");
+        Term combined = new Term("");
         if (leftObject.isCharacter()) {
             if (rightObject.isCharacter()) {
                 leftObject.combine(rightObject, Operator.getFromOperator(operator));
@@ -626,7 +664,7 @@ public abstract class JParser {
         } else if (rightObject.isCharacter()) {
             if (!leftObject.isCharacter()) {
                 if (rightObject.toString().equals(wrt)) {
-                    combined.combine(new MathObject(1), (operator.equals(Operator.MINUS) ? "-" : ""));
+                    combined.combine(new Term(1), (operator.equals(Operator.MINUS) ? "-" : ""));
                 } else {
                     combined.combine(rightObject, (operator.equals(Operator.MINUS) ? "-" : ""));
                 }
@@ -638,25 +676,25 @@ public abstract class JParser {
     /**
      * Differentiate division using the quotient rule.
      */
-    private static MathObject differentiateDiv(ExpressionNode left, ExpressionNode right, String wrt) {
-        MathObject leftObject = evaluate(left);
-        MathObject rightObject = evaluate(right);
+    private static Term differentiateDiv(ExpressionNode left, ExpressionNode right, String wrt) {
+        Term leftObject = evaluate(left);
+        Term rightObject = evaluate(right);
         leftObject.addParenthesis();
         rightObject.addParenthesis();
 
-        MathObject fx = findDerivative(left, wrt);
+        Term fx = findDerivative(left, wrt);
         fx.addParenthesis();
-        MathObject gx = findDerivative(right, wrt);
+        Term gx = findDerivative(right, wrt);
         gx.addParenthesis();
 
-        MathObject topLeft = MathObject.combine(fx, rightObject, " * ");
-        MathObject topRight = MathObject.combine(leftObject, gx, " * ");
+        Term topLeft = Term.combine(fx, rightObject, " * ");
+        Term topRight = Term.combine(leftObject, gx, " * ");
 
-        MathObject bottom = MathObject.combine(rightObject, new MathObject("^2"));
-        MathObject top = MathObject.combine(topLeft, topRight, " - ");
+        Term bottom = Term.combine(rightObject, new Term("^2"));
+        Term top = Term.combine(topLeft, topRight, " - ");
         top.addParenthesis();
         bottom.addParenthesis();
-        return MathObject.combine(top, bottom, "/");
+        return Term.combine(top, bottom, "/");
     }
 
     /**
